@@ -89,3 +89,42 @@ jobs:
         env:
           BRANCH: ${{ github.head_ref }}
         run: npx tsx scripts/commit-check.ts "$RUNNER_TEMP/message" --branch "$BRANCH"
+
+  # STATIC ANALYSIS BY SOMETHING THAT IS NOT US. The type checker is strict and
+  # the tests are pinned by mutation, and both only ever ask the questions the
+  # people here thought to ask. This asks a different set, written by people who
+  # have seen what goes wrong in code they did not write.
+  #
+  # It is advisory on this repository: the contract is Compact and the analysis
+  # reads the TypeScript around it, which is the client, the checks and the
+  # tests. That is where a mistake would be quiet rather than loud.
+  analyse:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@v3
+
+  # WHAT A DEPENDENCY BRINGS WITH IT, READ BEFORE IT IS MERGED RATHER THAN AFTER.
+  # Four packages are installed here today and that is deliberate; the point of
+  # this job is the fifth, added in some later change by somebody who did not
+  # weigh what it pulls in. A contract repository that takes an unvetted
+  # dependency has widened its trust boundary without saying so.
+  dependencies:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: low
+          comment-summary-in-pr: on-failure

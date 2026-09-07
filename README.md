@@ -1,5 +1,9 @@
 # Native token converter
 
+[![check](https://github.com/Private-Payroll/native-token-converter/actions/workflows/ci.yml/badge.svg)](https://github.com/Private-Payroll/native-token-converter/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Compact](https://img.shields.io/badge/Compact-0.34.0-informational.svg)](src/toolchain.ts)
+
 A Midnight contract that takes in an unshielded token and hands back a shielded
 note standing for it, and takes that note back and returns the token. Two
 circuits, no state of its own, and nobody in charge of it.
@@ -8,6 +12,26 @@ It is a primitive rather than a product: anybody may wrap any unshielded token,
 and nothing about the contract knows or cares which token that is. That is the
 whole of its usefulness and the whole of its cost, and the cost is written out
 below rather than left to be discovered.
+
+## Status
+
+**Not deployed, not audited, and not yet proved on a chain.** The circuits are
+compiled by the pinned compiler and exercised in a simulator that reads the
+ledger effects, so what the tests check is what the chain would be asked to do:
+which colour came in, which went out, how much of each, and where it went. That
+is not the same as a node accepting the transaction, and nobody should treat it
+as such until it has.
+
+What has been done to it, so the claim above can be read in proportion: every
+assertion names the change that turns it red and was watched doing so, 41
+mutations of the contract and its client were run against the suite with 40
+turning a named assertion red, and the one that stays green is documented in
+place with the reason rather than removed. Two independent review passes were
+run over the work by readers other than its author; both found defects, one of
+them a redemption to the zero address that would have destroyed a holder's
+money silently while leaving every pool solvent.
+
+Report anything that could lose money privately. See [SECURITY.md](SECURITY.md).
 
 ## What it does
 
