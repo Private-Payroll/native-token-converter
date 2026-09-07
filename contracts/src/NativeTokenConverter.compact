@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version >= 0.26.0;
+
+import CompactStandardLibrary;
+import "../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily"
+  prefix Token_;
+
+// The family metadata is re-exported so it is readable by name from public
+// state. Nothing here can change it after construction.
+import { _name, _symbol, _decimals, _isInitialized }
+  from "../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily";
+export { _name, _symbol, _decimals, _isInitialized };
+
+// `decimals` is fixed at 0 and it is not a display convention this contract can
+// honour. One value is stored for every asset this contract will ever accept,
+// and the assets do not share one. 0 says the only thing that is true of all of
+// them: this contract applies no scaling, so a wrapped note's integer value is
+// the backing asset's integer value, unit for unit. A holder wanting a decimal
+// point must take it from the backing asset, never from here.
+//
+// `initialize` is reachable only from this constructor: it is not among the
+// circuits below, so the metadata is written exactly once, when the contract
+// comes into existence.
+constructor(name_: Opaque<"string">, symbol_: Opaque<"string">) {
+  Token_initialize(name_, symbol_, 0 as Uint<8>);
+}
+
+// Take `amount` of the unshielded token `backing` into this contract, and mint
+// the caller `amount` of the shielded token that stands for it.
+//
+// The pool is not chosen. `backing` is the domain separator, so the shielded
+// colour minted is `tokenType(backing, thisContract)` - a function of the coin
+// being wrapped and of this address, and of nothing else. The first person to
+// wrap a colour brings its pool into existence; everybody after uses that one
+// because arithmetic offers no second one.
+//
+// Two identities hold here by construction rather than by an assertion that
+// could be written wrongly:
+//   - the colour received and the colour minted against are one argument;
+//   - the amount received and the amount minted are one argument.
+//
+// `amount` is a Uint<64> because that is the protocol's mint ceiling. The
+// widening to Uint<128> on the way in is explicit, so an over-ceiling wrap
+// cannot be expressed in the call at all, and there is no path on which this
+// contract takes in backing it could not mint a claim against.
+//
+// The returned coin info is the only copy of the minted coin. A wallet cannot
+// find a contract-minted coin by scanning the chain, so whoever builds the
+// transaction must deliver this to the recipient out of band. Dropping it
+// strands the value for good.
+export circuit wrap(
+  backing: Bytes<32>,
+  amount: Uint<64>,
+  to: ZswapCoinPublicKey,
+  nonce: Bytes<32>
+): ShieldedCoinInfo {
+  receiveUnshielded(disclose(backing), disclose(amount) as Uint<128>);
+  return Token__mint(
+    backing,
+    left<ZswapCoinPublicKey, ContractAddress>(disclose(to)),
+    amount,
+    nonce
+  );
+}
+
+// Destroy `coin` and pay out the same number of units of the unshielded token
+// that backs it.
+//
+// The same two identities hold, and again by construction:
+//   - `backing` is both the domain the coin is burned against and the colour
+//     paid out, so burning one colour and paying another is not expressible.
+//     The burn refuses unless `coin.color` is this contract's token type for
+//     `backing`, which is what makes the pool the coin came from the pool it
+//     returns to.
+//   - `coin.value` is both the amount burned and the amount paid, so a
+//     redemption that destroys less than it pays out is not expressible. There
+//     is no separate amount to disagree with it.
+//
+// A coin is redeemed whole. A holder wanting part of one splits it first and
+// redeems the part. That costs a second transaction, and a holder of nothing
+// but wrapped notes has no way to pay for either: fees are not this contract's
+// to solve and it does not pretend to.
+//
+// The payout address is checked. An unshielded transfer to the all-zero address
+// is accepted by the chain and can never be spent from again, so without this a
+// redemption to it would burn a note, balance perfectly, leave the pool solvent,
+// and destroy that holder's money in silence. A refused assert takes the whole
+// transaction with it, so nothing is burned on the way to the refusal; the check
+// is written first because that is where a reader looks for it.
+//
+// The burn's refund target is never reached. The change branch fires only when
+// less than the whole coin is destroyed, and `coin.value` is what is destroyed,
+// so the change is structurally zero; the assert below refuses rather than
+// leaving that to reasoning. The key handed over is a constant, and inert: it
+// has to be non-zero to satisfy the burn, and were the change branch ever to
+// fire, the coin it produced would be unspendable wherever it went, because
+// this circuit does not carry its coin info out.
+export circuit redeem(
+  backing: Bytes<32>,
+  coin: ShieldedCoinInfo,
+  to: UserAddress
+): [] {
+  assert(disclose(to) != default<UserAddress>,
+    "the payout address is the zero address, which nobody can ever spend from");
+  const change = Token__burn(
+    backing,
+    coin,
+    disclose(coin).value,
+    left<ZswapCoinPublicKey, ContractAddress>(
+      ZswapCoinPublicKey { bytes: pad(32, "no change is possible here") }
+    )
+  );
+  assert(!change.is_some, "the whole note was not destroyed");
+  sendUnshielded(
+    disclose(backing),
+    disclose(coin).value,
+    right<ContractAddress, UserAddress>(disclose(to))
+  );
+}

@@ -1,0 +1,21 @@
+node_modules/
+contracts/managed/
+*.tsbuildinfo
+.DS_Store
+
+# Local helper scripts a person double-clicks. They drive this repository from
+# one machine and are not part of what it publishes.
+*.command
+.compactc/
+COMMIT-MESSAGE.md
+
+# The record this machine keeps of what the publish door said. Local only.
+REPORT-*.txt
+
+# A name carrying `.local.` stays on the machine that wrote it. The list of
+# what must never be published is one of these, and it is kept out of the tree
+# deliberately: a list of words a repository forbids is a document containing
+# every one of them.
+*.local.json
+*.local.md
+*.local.test.ts

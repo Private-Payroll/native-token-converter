@@ -1,0 +1,91 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  # `edited` is not one of the default activity types, and without it a title
+  # or a body changed on the page after the checks went green is merged on the
+  # strength of a run that never saw it.
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: reuse the pinned compiler if it has been fetched before
+        uses: actions/cache@v4
+        with:
+          path: .compactc
+          key: compactc-${{ runner.os }}-${{ hashFiles('src/toolchain.ts') }}
+      - run: npm ci
+      # The contract is compiled first: the tests run the circuits, and the
+      # checks below read what the compiler produced.
+      - run: npm run compact
+      - run: npm run self-contained
+      # What is here is exactly what this repository publishes, checked against
+      # the list in src/publishable.ts in both directions. The half of that
+      # check which needs a list of words is not run here, because that list is
+      # deliberately not in the repository; it runs where the list is, before a
+      # commit is made.
+      - run: npm run publishable
+      # What git is TRACKING, against the same list. The step above walks the
+      # tree, where a file meant to stay on one machine is expected to be
+      # present; this asks whether one has found its way into the repository,
+      # which nothing else here can see.
+      - name: read what is tracked
+        run: git ls-files > "$RUNNER_TEMP/tracked"
+      - run: npx tsx scripts/check-publishable.ts --tracked "$RUNNER_TEMP/tracked"
+      - run: npm run typecheck
+      - run: npm test
+
+  title:
+    # A squashed merge makes the pull request title the commit subject and the
+    # body the commit body, so both are read here as the message they are about
+    # to become. The branch name is read too: it stays on this page after the
+    # branch is gone.
+    #
+    # What this job CANNOT do, said plainly because it is the one gap in the
+    # reading: the list of words is not in this repository, so what runs here is
+    # the half that names nothing. A title or a body typed on the pull request
+    # page is read for a dash, for an address, for a trailer and for the mark a
+    # tool leaves, and not for anything on that list. The title and body a pull
+    # request opens with are the commit's own, and that message was read against
+    # the list before it was committed; what is typed on the page afterwards was
+    # not.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Written through the environment rather than into the command line, so
+      # nothing a title says can become part of it.
+      # The number is appended because that is what a squashed merge writes:
+      # the subject that reaches the history is the title plus " (#N)", and a
+      # title read without it passes at a length the commit will not have.
+      - name: read the title and the body as the message they will become
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: printf '%s (#%s)\n\n%s\n' "$TITLE" "$NUMBER" "$BODY" > "$RUNNER_TEMP/message"
+      - name: hold the message and the branch to what a history can carry
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: npx tsx scripts/commit-check.ts "$RUNNER_TEMP/message" --branch "$BRANCH"

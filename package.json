@@ -1,0 +1,33 @@
+{
+  "name": "native-token-converter",
+  "version": "0.1.0",
+  "description": "Wrap an unshielded Midnight token into a shielded one, and redeem it back, with one pool per backing colour.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "compact": "tsx scripts/compile.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "self-contained": "tsx scripts/check-self-contained.ts",
+    "publishable": "tsx scripts/check-publishable.ts",
+    "verify": "npm run compact && npm run self-contained && npm run publishable && npm run typecheck && npm test",
+    "pretest": "npm run compact"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.19.0",
+    "@openzeppelin/compact-contracts": "0.4.0-alpha.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4",
+    "tsx": "4.20.6"
+  }
+}
