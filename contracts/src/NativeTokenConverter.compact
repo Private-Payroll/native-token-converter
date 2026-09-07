@@ -45,10 +45,30 @@ constructor(name_: Opaque<"string">, symbol_: Opaque<"string">) {
 // cannot be expressed in the call at all, and there is no path on which this
 // contract takes in backing it could not mint a claim against.
 //
-// The returned coin info is the only copy of the minted coin. A wallet cannot
-// find a contract-minted coin by scanning the chain, so whoever builds the
-// transaction must deliver this to the recipient out of band. Dropping it
-// strands the value for good.
+// Whether the recipient ever sees this note is not this circuit's to decide,
+// and it is the quiet way a wrap goes wrong. The mint puts the coin and the
+// key it was minted to into the transaction's outputs, and that is the whole
+// of what happens here. The encrypted copy a wallet scans for is attached
+// afterwards, by whatever builds the transaction, from an encryption key that
+// is not the key below and that no circuit can reach: there is none in the
+// compiled contract or in the runtime it calls.
+//
+// So a note whose encrypted copy was left off, or was made against a key that
+// is not the recipient's, is an ordinary note here. It is backed, the pool
+// balances, and its owner is never told it exists. This contract cannot see
+// the difference and does not pretend to.
+//
+// The token module this contract imports says something stronger and
+// narrower: that the value returned here is the recipient's only route to the
+// note, and that losing it loses the money. That is written for a mint to a
+// contract address, where there is no wallet to tell and no encrypted copy is
+// made. `to` is a coin public key and is passed as the left branch, so this
+// circuit cannot make that kind of mint at all.
+//
+// That sentence has been copied out of the module and into this repository
+// twice. Nothing here can edit somebody else's module, so the only place to
+// answer it is where a reader of the module is standing, and
+// test/inherited-claims.test.ts is what stops a third copy.
 export circuit wrap(
   backing: Bytes<32>,
   amount: Uint<64>,
@@ -93,9 +113,10 @@ export circuit wrap(
 // less than the whole coin is destroyed, and `coin.value` is what is destroyed,
 // so the change is structurally zero; the assert below refuses rather than
 // leaving that to reasoning. The key handed over is a constant, and inert: it
-// has to be non-zero to satisfy the burn, and were the change branch ever to
-// fire, the coin it produced would be unspendable wherever it went, because
-// this circuit does not carry its coin info out.
+// has to be non-zero to satisfy the burn, and it is nobody's key - thirty-two
+// bytes of text, with no secret behind them - so were the change branch ever
+// to fire, whatever it produced could not be spent by anyone. The assert
+// refuses first, which is what makes that hypothetical.
 export circuit redeem(
   backing: Bytes<32>,
   coin: ShieldedCoinInfo,

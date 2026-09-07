@@ -42,10 +42,15 @@ wrap(backing, amount, to, nonce) -> ShieldedCoinInfo
 Takes `amount` of the unshielded token `backing` into the contract and mints
 `amount` of the shielded note that stands for it, to `to`.
 
-The returned coin info is the only copy of the minted note. A wallet cannot find
-a contract-minted coin by scanning the chain, so whoever builds the transaction
-has to deliver it to the recipient out of band. Dropping it strands the value for
-good.
+`to` is checked for one thing and one thing only: that it is not the zero key.
+The backing is taken in before the note is minted, so a mistyped or stale `to`
+puts the backing into a pool it can never leave and mints a note against it that
+nobody holds the key to.
+
+Whether a note that was minted correctly can be found by its owner is a separate
+question, decided by the client that builds the transaction rather than here.
+That is the other thing a caller can get wrong with nothing refusing it, and it
+has its own section below.
 
 `nonce` is yours to choose and yours to get right. It must not repeat for a given
 pool, or the ledger rejects the transaction; and it should be secret and random,
@@ -83,11 +88,29 @@ see.
 
 ### Whether a minted note can be found is up to the transaction builder
 
-The mint binds a coin public key. The ciphertext a wallet needs in order to find
-the coin is a separate field the transaction builder attaches, resolved off
-chain, and a circuit has no access to an encryption key. A wrap built by a client
-that does not attach it is accepted, correctly minted, and invisible to its owner
-for ever.
+The mint binds a coin public key and an amount, and that is all it does. The
+encrypted copy of the note that a wallet scans for is attached by the client that
+builds the transaction, from the recipient's encryption public key. That is a
+different key from the one the note is minted to, and no circuit can reach one:
+there is no encryption key anywhere in the compiled contract or in the runtime it
+calls.
+
+So there are two ways to mint a note its owner never sees, and neither is refused
+here. A client can attach no encrypted copy at all. Or it can attach one made
+against a key that is not the recipient's, which nothing in the mint would
+notice, because the note is committed to the coin public key and the two keys are
+unrelated. Either way the note is correctly backed, the pool balances, and the
+person it was minted to is never told it exists.
+
+Wrapping to your own key is the easy case: your own client already holds both of
+your keys. Wrapping to somebody else means their encryption public key has to
+reach the client that builds the transaction, and how it gets there is a question
+for whatever you are building. Check it before the wrap. This contract cannot,
+and does not pretend to.
+
+The value `wrap` returns is a convenience for the caller. Where the encrypted
+copy was attached correctly it is not the recipient's only route to the note, and
+dropping it costs them nothing.
 
 ### One `decimals` ships for every asset, and the contract cannot decline to choose
 
