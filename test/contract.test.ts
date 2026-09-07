@@ -72,7 +72,7 @@ describe('wrap', () => {
     expect(BigInt(amount?.type.maxval ?? '0')).toBe(2n ** 64n - 1n);
   });
 
-  it('hands back the minted coin, which is the only copy of it', () => {
+  it('hands the minted coin back to the caller', () => {
     expect(circuit('wrap')['result-type'].name).toBe('ShieldedCoinInfo');
   });
 });
