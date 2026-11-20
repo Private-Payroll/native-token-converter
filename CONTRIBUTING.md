@@ -2,9 +2,9 @@
 
 ## What gets checked
 
-`npm run verify` compiles the contract, checks that every path this repository
-cites is in it, checks that what is in the tree is exactly what this repository
-publishes, typechecks, and runs the tests. The workflow runs all of that, plus
+`npm run verify` compiles the contract, builds the client library, checks that
+every path this repository cites is in it, checks that what is in the tree is
+exactly what this repository publishes, typechecks, and runs the tests. The workflow runs all of that, plus
 two things that need a pull request to exist: what git is tracking against the
 same publish list, and the pull request's own title, body and branch name held
 to what a commit message has to be.

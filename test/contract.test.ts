@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { sampleContractAddress } from '@midnight-ntwrk/compact-runtime';
 import { describe, expect, it } from 'vitest';
 import { Contract, ledger } from '../contracts/managed/contract/index.js';
-import { COMPACTC_VERSION } from '../src/toolchain.js';
+import { COMPACTC_VERSION } from '../scripts/toolchain.js';
 
 interface Argument {
   readonly name: string;
@@ -34,6 +34,12 @@ const info = JSON.parse(
   ).replace(/"maxval":\s*(\d+)/g, '"maxval": "$1"'),
 ) as ContractInfo;
 
+// The runtime the compiled contract is checked against is the one this package
+// installs, read from where it is pinned rather than written here a second time.
+const manifest = JSON.parse(
+  readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+) as { readonly dependencies: Readonly<Record<string, string>> };
+
 const circuit = (name: string): CircuitInfo => {
   const found = info.circuits.find((each) => each.name === name);
   if (found === undefined) {
@@ -52,8 +58,11 @@ describe('what the deployed contract offers', () => {
 
   it('was built by the pinned compiler', () => {
     expect(info['compiler-version']).toBe(COMPACTC_VERSION);
-    expect(info['language-version']).toBe('0.26.0');
-    expect(info['runtime-version']).toBe('0.19.0');
+    expect(info['language-version']).toBe('0.28.0');
+  });
+
+  it('expects the runtime this package depends on, and no other', () => {
+    expect(info['runtime-version']).toBe(manifest.dependencies['@midnight-ntwrk/compact-runtime']);
   });
 });
 

@@ -3,18 +3,18 @@
 /**
  * Refuses if any published file points somewhere a reader cannot follow.
  *
- * What counts as published is src/publishable.ts's answer rather than a guess
+ * What counts as published is scripts/publishable.ts's answer rather than a guess
  * from a file extension: a reader of this repository never opens a file that
  * is not published, so a citation in one is nobody's to follow.
  *
- * The judgement is in src/self-contained.ts; this walks the tree, resolves what
+ * The judgement is in scripts/self-contained.ts; this walks the tree, resolves what
  * each file points at, and reports.
  */
 
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { PUBLISHED, standingOf } from '../src/publishable.js';
-import { unfollowableCitations } from '../src/self-contained.js';
+import { PUBLISHED, standingOf } from './publishable.js';
+import { unfollowableCitations } from './self-contained.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
 

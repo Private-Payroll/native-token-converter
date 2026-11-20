@@ -10,8 +10,8 @@ import {
   messageProblem,
   subjectProblem,
   SUBJECT_LIMIT,
-} from '../src/commit.js';
-import { parseVocabulary } from '../src/vocabulary.js';
+} from '../scripts/commit.js';
+import { parseVocabulary } from '../scripts/vocabulary.js';
 
 /**
  * Built rather than written out: this file is published, and the check that

@@ -14,7 +14,7 @@
  * writing, and it refuses rather than warns.
  *
  * What each one is allowed to say is here. What none of them may say is in
- * src/vocabulary.ts, half of it as shapes that can be published and half of it
+ * scripts/vocabulary.ts, half of it as shapes that can be published and half of it
  * as a list that cannot.
  */
 

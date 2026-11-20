@@ -5,7 +5,7 @@
  *
  * Three questions, and the first two are the same question asked both ways:
  *
- *  - is anything here that src/publishable.ts does not name?
+ *  - is anything here that scripts/publishable.ts does not name?
  *  - is anything named there missing from here?
  *  - do that list and .gitignore still agree about what stays behind?
  *
@@ -26,7 +26,7 @@
  * step that stages a commit can stage exactly them rather than whatever the
  * tree happens to hold.
  *
- * The judgement is in src/publishable.ts and src/vocabulary.ts; this walks the
+ * The judgement is in scripts/publishable.ts and scripts/vocabulary.ts; this walks the
  * tree, reads the files, and reports.
  */
 
@@ -39,13 +39,13 @@ import {
   PUBLISHED,
   publishRefusals,
   trackedRefusals,
-} from '../src/publishable.js';
+} from './publishable.js';
 import {
   parseVocabulary,
   saidPlainly,
   whatMustNotBePublished,
   type Vocabulary,
-} from '../src/vocabulary.js';
+} from './vocabulary.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
