@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from 'vitest';
-import { helpersCitedIn, pathsCitedIn, unfollowableCitations } from '../src/self-contained.js';
+import { helpersCitedIn, pathsCitedIn, unfollowableCitations } from '../scripts/self-contained.js';
 
 const nothingExists = (): boolean => false;
 const everythingExists = (): boolean => true;

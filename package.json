@@ -3,31 +3,43 @@
   "version": "0.1.0",
   "description": "Wrap an unshielded Midnight token into a shielded one, and redeem it back, with one pool per backing colour.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Private-Payroll/native-token-converter.git"
+  },
   "type": "module",
   "private": true,
   "engines": {
     "node": ">=22"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "compact": "tsx scripts/compile.ts",
     "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "self-contained": "tsx scripts/check-self-contained.ts",
     "publishable": "tsx scripts/check-publishable.ts",
-    "verify": "npm run compact && npm run self-contained && npm run publishable && npm run typecheck && npm test",
-    "pretest": "npm run compact"
+    "verify": "npm run compact && npm run build && npm run self-contained && npm run publishable && npm run typecheck && vitest run",
+    "pretest": "npm run compact",
+    "prepack": "npm run build"
   },
   "dependencies": {
-    "@midnight-ntwrk/compact-runtime": "0.19.0",
-    "@openzeppelin/compact-contracts": "0.4.0-alpha.1"
+    "@midnight-ntwrk/compact-runtime": "0.21.0"
   },
   "devDependencies": {
-    "@types/node": "^22.19.0",
+    "@openzeppelin/compact-contracts": "0.4.0-alpha.1",
+    "@types/node": "22.20.1",
+    "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "vitest": "3.2.4",
-    "tsx": "4.20.6"
+    "vitest": "3.2.4"
   }
 }

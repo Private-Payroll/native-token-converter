@@ -18,16 +18,16 @@
  *   commit-check.ts <file> [--vocabulary <file>] [--branch <name>] [--author <name>]
  *
  * `--vocabulary` names a list of what must not be published that is not in
- * this repository, for the reason given in src/vocabulary.ts. Without it the
+ * this repository, for the reason given in scripts/vocabulary.ts. Without it the
  * rules that name nothing still run, which is what a pull request can check.
  *
- * The judgement is in src/commit.ts and src/vocabulary.ts; this reads a file
+ * The judgement is in scripts/commit.ts and scripts/vocabulary.ts; this reads a file
  * and reports.
  */
 
 import { readFileSync } from 'node:fs';
-import { authorProblem, branchFor, branchProblem, messageProblem } from '../src/commit.js';
-import { parseVocabulary, type Vocabulary } from '../src/vocabulary.js';
+import { authorProblem, branchFor, branchProblem, messageProblem } from './commit.js';
+import { parseVocabulary, type Vocabulary } from './vocabulary.js';
 
 function valueOf(args: readonly string[], flag: string): string | undefined {
   const at = args.indexOf(flag);

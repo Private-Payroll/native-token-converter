@@ -76,13 +76,13 @@ describe('the converter', () => {
   });
 
   const context = (circuit: string): never =>
-    createCircuitContext(
-      circuit,
-      converterAddress,
-      sampleContractAddress(),
-      state as never,
-      {},
-    ) as never;
+    createCircuitContext({
+      circuitId: circuit,
+      contractAddress: converterAddress,
+      coinPublicKeyOrZswapState: sampleContractAddress(),
+      contractState: state as never,
+      privateState: {},
+    }) as never;
 
   const effectsOf = (result: { context: unknown }): Effects =>
     (result.context as { callContext: { currentQueryContext: { effects: Effects } } }).callContext

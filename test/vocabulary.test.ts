@@ -10,7 +10,7 @@ import {
   saidPlainly,
   termOccurrences,
   whatMustNotBePublished,
-} from '../src/vocabulary.js';
+} from '../scripts/vocabulary.js';
 
 /**
  * The fixtures below are built rather than written out, and that is not a

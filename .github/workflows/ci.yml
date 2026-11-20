@@ -29,27 +29,23 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .compactc
-          key: compactc-${{ runner.os }}-${{ hashFiles('src/toolchain.ts') }}
+          key: compactc-${{ runner.os }}-${{ hashFiles('scripts/toolchain.ts') }}
       - run: npm ci
-      # The contract is compiled first: the tests run the circuits, and the
-      # checks below read what the compiler produced.
-      - run: npm run compact
-      - run: npm run self-contained
-      # What is here is exactly what this repository publishes, checked against
-      # the list in src/publishable.ts in both directions. The half of that
-      # check which needs a list of words is not run here, because that list is
-      # deliberately not in the repository; it runs where the list is, before a
-      # commit is made.
-      - run: npm run publishable
-      # What git is TRACKING, against the same list. The step above walks the
+      # Exactly what a contributor runs: compile the contract, build the
+      # library, check every cited path, check that what is here is exactly
+      # what this repository publishes (against the list in
+      # scripts/publishable.ts, in both directions), typecheck, and test. The
+      # half of the publish check which needs a list of words is not run here,
+      # because that list is deliberately not in the repository; it runs where
+      # the list is, before a commit is made.
+      - run: npm run verify
+      # What git is TRACKING, against the same list. The publish check walks the
       # tree, where a file meant to stay on one machine is expected to be
       # present; this asks whether one has found its way into the repository,
       # which nothing else here can see.
       - name: read what is tracked
         run: git ls-files > "$RUNNER_TEMP/tracked"
       - run: npx tsx scripts/check-publishable.ts --tracked "$RUNNER_TEMP/tracked"
-      - run: npm run typecheck
-      - run: npm test
 
   title:
     # A squashed merge makes the pull request title the commit subject and the
@@ -112,8 +108,8 @@ jobs:
       - uses: github/codeql-action/analyze@v3
 
   # WHAT A DEPENDENCY BRINGS WITH IT, READ BEFORE IT IS MERGED RATHER THAN AFTER.
-  # Four packages are installed here today and that is deliberate; the point of
-  # this job is the fifth, added in some later change by somebody who did not
+  # The packages installed here are few and that is deliberate; the point of
+  # this job is the next one, added in some later change by somebody who did not
   # weigh what it pulls in. A contract repository that takes an unvetted
   # dependency has widened its trust boundary without saying so.
   dependencies:

@@ -12,7 +12,7 @@ import {
   standingIn,
   standingOf,
   trackedRefusals,
-} from '../src/publishable.js';
+} from '../scripts/publishable.js';
 
 /** A tree holding exactly what is published, and one file kept on a machine. */
 const aCleanTree = [...PUBLISHED, 'EXAMPLE.command'];

@@ -2,7 +2,7 @@
 
 [![check](https://github.com/Private-Payroll/native-token-converter/actions/workflows/ci.yml/badge.svg)](https://github.com/Private-Payroll/native-token-converter/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Compact](https://img.shields.io/badge/Compact-0.34.0-informational.svg)](src/toolchain.ts)
+[![Compact](https://img.shields.io/badge/Compact-0.36.1-informational.svg)](scripts/toolchain.ts)
 
 A Midnight contract that takes in an unshielded token and hands back a shielded
 note standing for it, and takes that note back and returns the token. Two
@@ -180,8 +180,8 @@ keeps honouring its notes, because nothing can stop it.
 The colour derivation is free off chain and would cost an entire circuit on
 chain, so the contract does not offer it and clients are expected to compute it.
 
-This is not published to a package registry. It is forty lines of TypeScript in
-`src/wrapped-colour.ts`; clone the repository, or copy the file.
+This is not published to a package registry yet. It is one short TypeScript
+file, `src/wrapped-colour.ts`; clone the repository, or copy the file.
 
 ```ts
 import { isWrappedNoteOf, wrappedColour } from './src/wrapped-colour.js';
@@ -204,16 +204,18 @@ npm install
 npm run verify
 ```
 
-`verify` compiles the contract, checks that every path this repository cites is
-in it, typechecks, and runs the tests. The tests run the compiled circuits and
+`verify` compiles the contract, builds the client library, checks that every
+path this repository cites is in it, typechecks, and runs the tests. The tests run the compiled circuits and
 read the ledger effects they produce, so what they check is what the chain would
 be asked to do.
 
 The Compact compiler is pinned, and fetched on first use if it is not already
-here, so a clone, Node 22 or newer, and `curl` and `unzip` are enough. The pinned
-version, and where it comes from, are in `src/toolchain.ts`. There is a pinned
-compiler for macOS and Linux only; on anything else the build refuses rather than
-guessing, and `COMPACTC` can point at one you installed yourself. Proving keys
+here, so a clone, Node 22 or newer, and `curl` and `unzip` are enough. Every
+download is checked against the digest its release published before it is
+unpacked. The pinned version, where it comes from and those digests are in
+`scripts/toolchain.ts`. There is a pinned compiler for macOS and Linux only; on
+anything else the build refuses rather than guessing, and `COMPACTC` can point
+at one you installed yourself. Proving keys
 are skipped by default because they take minutes and are needed only to deploy or
 to prove; `npm run compact -- --with-proving-keys` builds them.
 

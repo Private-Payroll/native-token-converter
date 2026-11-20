@@ -11,8 +11,8 @@ import {
   retractedNotices,
   runsOf,
   significantWords,
-} from '../src/inherited-claims.js';
-import { PUBLISHED } from '../src/publishable.js';
+} from '../scripts/inherited-claims.js';
+import { PUBLISHED } from '../scripts/publishable.js';
 
 /**
  * The invented text below is deliberate nonsense.
