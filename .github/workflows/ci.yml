@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,6 +32,57 @@ jobs:
       # contract, build the library, check every cited path, typecheck, lint,
       # and test.
       - run: npm run verify
+
+  # EVERY CONTRACT, COMPILED WITH ITS PROVING AND VERIFIER KEYS. The build
+  # above compiles the converter without keys, which is all its tests need;
+  # this compiles every contract the way a deployment and the local chain
+  # tests need them, and keeps the manifests, so a build on another machine is
+  # compared with this one by comparing the files. The local chain tests are
+  # typechecked and linted against those builds here, so a change to a
+  # circuit that breaks them fails its own pull request.
+  keys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: reuse the pinned compiler if it has been fetched before
+        uses: actions/cache@v4
+        with:
+          path: tools/toolchain/.compactc
+          key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
+      - run: npm ci
+      - run: npm run check:local-chain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-manifests
+          path: contracts/*/managed-keys/*.manifest.json
+
+  # THE CONTRACTS ON A REAL CHAIN. Docker on the runner starts the pinned node,
+  # indexer and proof server, and every transaction is proved and finalized.
+  # It takes many minutes, so it runs when asked and after a merge to main,
+  # and never as a check a pull request waits on.
+  local-chain:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: reuse the pinned compiler if it has been fetched before
+        uses: actions/cache@v4
+        with:
+          path: tools/toolchain/.compactc
+          key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
+      - run: npm ci
+      # Compiles every contract with keys, checks the tests against those
+      # builds, then deploys and calls them.
+      - run: npm run test:local-chain
 
   # STATIC ANALYSIS BY SOMETHING THAT IS NOT US. The type checker is strict and
   # the tests fail when the code is broken on purpose, and both only ever ask

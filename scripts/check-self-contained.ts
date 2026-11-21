@@ -11,8 +11,8 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { repositoryFiles } from './repository-files.js';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { ignoreRules, isIgnored, repositoryFiles } from './repository-files.js';
 import { unfollowableCitations } from './self-contained.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -36,6 +36,19 @@ function present(path: string): boolean {
   return path.endsWith('.js') && existsSync(`${path.slice(0, -3)}.ts`);
 }
 
+const IGNORED = ignoreRules(readFileSync(join(ROOT, '.gitignore'), 'utf8'));
+
+/**
+ * Whether `path` lies in a folder `.gitignore` names as generated, such as a
+ * contract's build. What is there is written by a command of this repository,
+ * so a citation of it is followable once that command has run, whether or not
+ * it has run here.
+ */
+function generated(path: string): boolean {
+  const inside = relative(ROOT, path);
+  return !inside.startsWith('..') && isIgnored(IGNORED, inside.split(sep).join('/'), false);
+}
+
 /**
  * A citation written in `file` points either beside that file or, when it is
  * written without a leading dot, from the top of the repository. Either resolving
@@ -43,7 +56,8 @@ function present(path: string): boolean {
  * are followable.
  */
 function resolvesFrom(file: string, cited: string): boolean {
-  return present(resolve(dirname(file), cited)) || present(resolve(ROOT, cited));
+  const beside = resolve(dirname(file), cited);
+  return present(beside) || present(resolve(ROOT, cited)) || generated(beside);
 }
 
 const files = repositoryFiles(ROOT);

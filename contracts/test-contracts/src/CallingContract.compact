@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version 0.28.0;
+
+// A generic contract that holds one shielded coin and moves it through a
+// converter it is handed by reference. It wraps public tokens to itself and
+// keeps the coin, sends the coin it holds back to be redeemed, takes the
+// payout itself, and takes a coin a wallet gives it. Two circuits leave out
+// the claim a contract must make on what it is sent, so that the ledger's
+// refusal of them can be observed.
+
+import CompactStandardLibrary;
+
+// The converter's circuits with a recipient that may be a contract.
+contract WiderConverter {
+  circuit wrap(
+    backing: Bytes<32>,
+    amount: Uint<64>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    nonce: Bytes<32>
+  ): ShieldedCoinInfo;
+  circuit redeem(
+    backing: Bytes<32>,
+    coin: ShieldedCoinInfo,
+    to: Either<ContractAddress, UserAddress>
+  ): [];
+}
+
+// The converter's circuits as they are: a mint to a coin key, a payout to a
+// user address.
+contract Converter {
+  circuit wrap(
+    backing: Bytes<32>,
+    amount: Uint<64>,
+    to: ZswapCoinPublicKey,
+    nonce: Bytes<32>
+  ): ShieldedCoinInfo;
+  circuit redeem(backing: Bytes<32>, coin: ShieldedCoinInfo, to: UserAddress): [];
+}
+
+// The coins this contract has been given, by nonce, which of them it holds,
+// and whether it holds one. A map is used rather than one cell because a
+// cell of a qualified coin takes `writeCoin` once: every later write to it is
+// refused by the ledger, while a map takes a new coin under each new key.
+export ledger coins: Map<Bytes<32>, QualifiedShieldedCoinInfo>;
+export ledger heldNonce: Bytes<32>;
+export ledger holding: Boolean;
+
+circuit self(): Either<ZswapCoinPublicKey, ContractAddress> {
+  return right<ZswapCoinPublicKey, ContractAddress>(kernel.self());
+}
+
+circuit keep(coin: ShieldedCoinInfo): [] {
+  assert(!holding, "this contract already holds a coin");
+  coins.insertCoin(coin.nonce, coin, self());
+  heldNonce = coin.nonce;
+  holding = true;
+}
+
+// Sends the held coin whole to `converterAt` and forgets it, returning the
+// coin as the converter will receive it.
+circuit release(converterAt: ContractAddress): ShieldedCoinInfo {
+  assert(holding, "this contract holds no coin");
+  const held = coins.lookup(heldNonce);
+  const sent = sendShielded(held, right<ZswapCoinPublicKey, ContractAddress>(converterAt), held.value);
+  assert(!sent.change.is_some, "the whole coin was not sent");
+  coins.remove(heldNonce);
+  holding = false;
+  return sent.sent;
+}
+
+// Has the converter mint `amount` to this contract, claims the coin and keeps it.
+export circuit wrapToSelf(
+  converter: WiderConverter,
+  backing: Bytes<32>,
+  amount: Uint<64>,
+  nonce: Bytes<32>
+): ShieldedCoinInfo {
+  const coin = disclose(converter).wrap(disclose(backing), disclose(amount), self(), disclose(nonce));
+  receiveShielded(coin);
+  keep(coin);
+  return coin;
+}
+
+// Has the converter mint to this contract and does not claim the coin.
+export circuit wrapToSelfUnclaimed(
+  converter: WiderConverter,
+  backing: Bytes<32>,
+  amount: Uint<64>,
+  nonce: Bytes<32>
+): ShieldedCoinInfo {
+  return disclose(converter).wrap(disclose(backing), disclose(amount), self(), disclose(nonce));
+}
+
+// Sends the held coin to the converter at `converterAt` and redeems it there,
+// paid to the user address `to`.
+export circuit redeemHeld(
+  converter: WiderConverter,
+  converterAt: ContractAddress,
+  backing: Bytes<32>,
+  to: UserAddress
+): [] {
+  const coin = release(disclose(converterAt));
+  disclose(converter).redeem(disclose(backing), coin, right<ContractAddress, UserAddress>(disclose(to)));
+}
+
+// Redeems the held coin with this contract as the payee and receives the payout.
+export circuit redeemHeldToSelf(
+  converter: WiderConverter,
+  converterAt: ContractAddress,
+  backing: Bytes<32>
+): [] {
+  const coin = release(disclose(converterAt));
+  disclose(converter).redeem(disclose(backing), coin, left<ContractAddress, UserAddress>(kernel.self()));
+  receiveUnshielded(disclose(backing), coin.value);
+}
+
+// Redeems the held coin with this contract as the payee and does not receive the payout.
+export circuit redeemHeldToSelfUnreceived(
+  converter: WiderConverter,
+  converterAt: ContractAddress,
+  backing: Bytes<32>
+): [] {
+  const coin = release(disclose(converterAt));
+  disclose(converter).redeem(disclose(backing), coin, left<ContractAddress, UserAddress>(kernel.self()));
+}
+
+// Takes `coin` from the calling wallet and keeps it.
+export circuit deposit(coin: ShieldedCoinInfo): [] {
+  receiveShielded(disclose(coin));
+  keep(disclose(coin));
+}
+
+// Has the converter as it is mint to the coin key `to`.
+export circuit wrapThrough(
+  converter: Converter,
+  backing: Bytes<32>,
+  amount: Uint<64>,
+  to: ZswapCoinPublicKey,
+  nonce: Bytes<32>
+): ShieldedCoinInfo {
+  return disclose(converter).wrap(disclose(backing), disclose(amount), disclose(to), disclose(nonce));
+}
+
+// Sends the held coin to the converter as it is and redeems it there.
+export circuit redeemHeldThrough(
+  converter: Converter,
+  converterAt: ContractAddress,
+  backing: Bytes<32>,
+  to: UserAddress
+): [] {
+  const coin = release(disclose(converterAt));
+  disclose(converter).redeem(disclose(backing), coin, disclose(to));
+}

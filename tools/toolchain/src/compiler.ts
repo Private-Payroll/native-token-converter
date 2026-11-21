@@ -2,9 +2,10 @@
 
 /**
  * Finds the pinned Compact compiler, fetching it into this package's cache the
- * first time, and returns its path. COMPACTC, when set, names a compiler to use
- * instead. Every download is checked against its published digest before it is
- * unpacked.
+ * first time, and compiles any contract with it. COMPACTC, when set, names a
+ * compiler to use instead. Every download is checked against its published
+ * digest before it is unpacked, and a compiler of any other version is refused
+ * before anything is built.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -17,10 +18,18 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { arch, platform } from 'node:os';
-import { join, resolve } from 'node:path';
-import { COMPACTC_VERSION, digestProblem, releaseAsset, releaseUrl } from './toolchain.js';
+import { dirname, join, resolve } from 'node:path';
+import {
+  COMPACTC_VERSION,
+  digestProblem,
+  releaseAsset,
+  releaseUrl,
+  reportedVersion,
+  wrongVersion,
+} from './toolchain.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
 /*
@@ -83,4 +92,57 @@ export function compiler(): string {
   }
   const cached = join(CACHE, 'compactc');
   return existsSync(cached) ? cached : fetchCompiler();
+}
+
+/**
+ * The pinned compiler: the one COMPACTC names, else the cached one, else one
+ * fetched now. Throws before returning one of any other version.
+ */
+export function pinnedCompiler(): { readonly path: string; readonly version: string } {
+  const path = compiler();
+  const printed = execFileSync(path, ['--version'], { encoding: 'utf8' }).trim();
+  const version = reportedVersion(printed);
+  if (version !== COMPACTC_VERSION) {
+    throw new Error(wrongVersion(printed));
+  }
+  return { path, version };
+}
+
+/** How a contract is compiled. */
+export interface CompileOptions {
+  /**
+   * Whether to write proving keys. They take minutes and megabytes, and are
+   * needed only to deploy or to prove.
+   */
+  readonly withProvingKeys: boolean;
+}
+
+/**
+ * Compiles the contract at `source` into `outputDir`, replacing whatever was
+ * there, and returns the compiler version that built it.
+ */
+export function compileContract(
+  source: string,
+  outputDir: string,
+  options: CompileOptions,
+): string {
+  const compactc = pinnedCompiler();
+  rmSync(outputDir, { recursive: true, force: true });
+  mkdirSync(outputDir, { recursive: true });
+  execFileSync(
+    compactc.path,
+    [...(options.withProvingKeys ? [] : ['--skip-zk']), source, outputDir],
+    {
+      stdio: 'inherit',
+      // zkir sits beside the compiler and is found on the path.
+      env: { ...process.env, PATH: `${dirname(compactc.path)}:${process.env['PATH'] ?? ''}` },
+    },
+  );
+  // The generated code is ESM and lands in a directory with no package.json of
+  // its own, so Node has to be told what it is looking at.
+  writeFileSync(
+    join(outputDir, 'package.json'),
+    `${JSON.stringify({ type: 'module' }, null, 2)}\n`,
+  );
+  return compactc.version;
 }

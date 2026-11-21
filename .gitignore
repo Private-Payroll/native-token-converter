@@ -1,5 +1,10 @@
 node_modules/
 contracts/*/managed/
+# Builds with proving and verifier keys, and the manifest beside each.
+contracts/*/managed-keys/
+# Where testkit-js writes its log, under the folder a test runs from; it
+# picks the folder when it is imported, before anything can name another.
+logs/
 dist/
 *.tsbuildinfo
 .DS_Store

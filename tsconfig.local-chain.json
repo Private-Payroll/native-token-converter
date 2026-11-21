@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["vitest.local-chain.config.ts", "contracts/*/test/local-chain", "tools/*/src"],
+  "exclude": []
+}

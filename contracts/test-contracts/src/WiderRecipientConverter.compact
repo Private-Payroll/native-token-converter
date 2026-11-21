@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version 0.28.0;
+
+// The converter's two circuits with a recipient that may be a contract as well
+// as a wallet. `wrap` mints to a coin key or to a contract address, and `redeem`
+// pays a user address or a contract address. Both are written on the standard
+// library's own primitives, so the ledger's rules for coins and payments
+// addressed to a contract are what keep a mint or a payment from being
+// stranded. The colour of what is minted is `tokenType(backing, this contract)`,
+// exactly as in the converter.
+
+import CompactStandardLibrary;
+
+// Whether a coin recipient is the all-zero key or the all-zero address.
+circuit isZeroCoinRecipient(to: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+  return to.is_left
+    ? to.left == default<ZswapCoinPublicKey>
+    : to.right == default<ContractAddress>;
+}
+
+// Whether a coin recipient is this contract. The branch not taken is ignored:
+// comparing the whole value would let a caller pass this contract's address
+// with anything at all in the other branch and be told it is someone else.
+circuit isThisContract(to: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+  return !to.is_left && to.right == kernel.self();
+}
+
+// Whether a payout recipient is this contract, read the same way.
+circuit paysThisContract(to: Either<ContractAddress, UserAddress>): Boolean {
+  return to.is_left && to.left == kernel.self();
+}
+
+// Whether a payout recipient is the all-zero address of either kind.
+circuit isZeroPayee(to: Either<ContractAddress, UserAddress>): Boolean {
+  return to.is_left
+    ? to.left == default<ContractAddress>
+    : to.right == default<UserAddress>;
+}
+
+// Take `amount` of the unshielded token `backing` into this contract, and mint
+// `amount` of its shielded token to `to`, a coin key or a contract.
+//
+// A mint to this contract itself is refused. The standard library claims a
+// coin sent to the contract that is running, so such a mint would be valid and
+// the coin would sit here with no circuit able to spend it.
+export circuit wrap(
+  backing: Bytes<32>,
+  amount: Uint<64>,
+  to: Either<ZswapCoinPublicKey, ContractAddress>,
+  nonce: Bytes<32>
+): ShieldedCoinInfo {
+  const recipient = disclose(to);
+  assert(disclose(amount) != 0, "the amount to wrap is zero");
+  assert(!isZeroCoinRecipient(recipient), "the recipient is the zero key or the zero address");
+  assert(!isThisContract(recipient), "the recipient is this contract, which could never spend the coin");
+  receiveUnshielded(disclose(backing), disclose(amount) as Uint<128>);
+  return mintShieldedToken(disclose(backing), disclose(amount), disclose(nonce), recipient);
+}
+
+// Destroy `coin` whole and pay the same number of units of `backing` to `to`,
+// a contract or a user address.
+//
+// The coin is received here, sent whole to the burn address, and the burn must
+// leave no change. Since the whole coin is sent, that last assert cannot fail;
+// it is kept so that a change to the amount burned is refused rather than
+// leaving change behind. A payment to this contract itself is refused, because the
+// payout would return to the pool and the holder would have burned the coin
+// for nothing.
+export circuit redeem(
+  backing: Bytes<32>,
+  coin: ShieldedCoinInfo,
+  to: Either<ContractAddress, UserAddress>
+): [] {
+  const payee = disclose(to);
+  const burned = disclose(coin);
+  assert(!isZeroPayee(payee), "the payout address is the zero address, which nobody can ever spend from");
+  assert(!paysThisContract(payee), "the payout address is this contract, which would keep the payout in the pool");
+  assert(burned.color == tokenType(disclose(backing), kernel.self()),
+    "the coin is not of this contract's colour for that backing token");
+  assert(burned.value != 0, "the coin is worth nothing");
+  receiveShielded(burned);
+  const sent = sendImmediateShielded(burned, shieldedBurnAddress(), burned.value);
+  assert(!sent.change.is_some, "the whole coin was not destroyed");
+  sendUnshielded(disclose(backing), burned.value, payee);
+}

@@ -6,6 +6,8 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.21.0",
+    "@native-token-converter/local-chain": "0.1.0",
     "@native-token-converter/toolchain": "0.1.0"
   }
 }
