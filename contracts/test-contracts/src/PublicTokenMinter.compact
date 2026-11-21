@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// A test contract that mints public tokens of as many colours as a test asks
+// for, so the converter can be given many pools on a local chain. Each colour
+// is derived from a domain separator the caller names and this contract's own
+// address, so two calls with the same separator mint the same colour. It holds
+// nothing: every token it mints goes straight to the address it is told.
+
+pragma language_version 0.28.0;
+
+import CompactStandardLibrary;
+
+// Mints `amount` of the colour derived from `domainSep` to `to`, and returns
+// that colour.
+export circuit mint(domainSep: Bytes<32>, amount: Uint<64>, to: UserAddress): Bytes<32> {
+  return mintUnshieldedToken(
+    disclose(domainSep),
+    disclose(amount),
+    right<ContractAddress, UserAddress>(disclose(to))
+  );
+}

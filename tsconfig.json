@@ -17,6 +17,7 @@
   },
   "include": [
     "vitest.config.ts",
+    "vitest.local-chain.config.ts",
     "scripts",
     "test",
     "contracts/*/scripts",
@@ -27,5 +28,6 @@
     "tools/*/test",
     "apps/*/src",
     "apps/*/test"
-  ]
+  ],
+  "exclude": ["contracts/*/test/local-chain"]
 }

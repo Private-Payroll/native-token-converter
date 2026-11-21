@@ -26,7 +26,12 @@
     "test": "vitest run",
     "self-contained": "tsx scripts/check-self-contained.ts",
     "verify": "prettier --check . && npm run compact && npm run build && npm run self-contained && npm run typecheck && npm run lint && vitest run",
-    "pretest": "npm run compact"
+    "pretest": "npm run compact",
+    "compile:keys": "tsx tools/toolchain/src/compile-with-keys.ts",
+    "local-chain:start": "tsx tools/local-chain/src/cli.ts start",
+    "local-chain:stop": "tsx tools/local-chain/src/cli.ts stop",
+    "check:local-chain": "npm run compile:keys && tsc -p tsconfig.local-chain.json && LOCAL_CHAIN_LINT=1 eslint --max-warnings 0 contracts/*/test/local-chain",
+    "test:local-chain": "tsx tools/local-chain/src/cli.ts check && npm run check:local-chain && vitest run --config vitest.local-chain.config.ts"
   },
   "devDependencies": {
     "@eslint/compat": "2.1.1",
@@ -43,5 +48,11 @@
   "prettier": {
     "singleQuote": true,
     "printWidth": 100
+  },
+  "overrides": {
+    "@midnightntwrk/ledger-v9": "1.0.1",
+    "archiver-utils": {
+      "glob": "12.0.0"
+    }
   }
 }

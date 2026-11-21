@@ -2,8 +2,9 @@
 
 /**
  * Which Compact toolchain this repository is written against, and where to get
- * it. Kept apart from the script that runs it so the choice can be read, and
- * tested, without compiling anything.
+ * it, and which node, indexer and proof server a local chain runs. Kept apart
+ * from the scripts that run them so the choice can be read, and tested,
+ * without compiling or starting anything.
  */
 
 /**
@@ -16,6 +17,30 @@
  * a clone has to be able to get the same compiler this was written against.
  */
 export const COMPACTC_VERSION = '0.36.1';
+
+/*
+ * The three services a contract is deployed and called against on a local
+ * chain, and the only place their images are written. The node is the
+ * version the public preprod network reports, the indexer the version its
+ * source was released as, and the proof server the release built on the same
+ * ledger, so what passes locally was checked by the ledger a real deployment
+ * meets. They move together: a proof server proves for one ledger, and a node
+ * and an indexer of another ledger refuse what it proves. Each is
+ * pinned by its tag and by the digest its registry published for that tag, so
+ * a tag moved to other contents later is refused by Docker rather than run.
+ */
+
+/** The node image, run with the development chain preset. */
+export const NODE_IMAGE =
+  'midnightntwrk/midnight-node:2.1.101@sha256:0c1ad548d523c1109aa1f16daab1bf72dcb78c7e17b8a8c6d97424ad0eba7b8a';
+
+/** The indexer image, run standalone against that node. */
+export const INDEXER_IMAGE =
+  'midnightntwrk/indexer-standalone:4.4.101@sha256:119f35db548ba1c390845f215bb1e928e73038bef7c315825aee0461bd54499d';
+
+/** The proof server image. */
+export const PROOF_SERVER_IMAGE =
+  'midnightntwrk/proof-server:9.0.1@sha256:90e36a14f92c2004127f0ed1cfd6ee89d770cf1f6e9cd7f02026ffd4ecb42f37';
 
 /**
  * The version a compiler reports, read from what `--version` prints. Releases

@@ -1,0 +1,26 @@
+{
+  "name": "@native-token-converter/local-chain",
+  "version": "0.1.0",
+  "description": "A local development chain: the pinned node, indexer and proof server, a scanning wallet, and the deploy and call of any compiled contract with every transaction measured.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./services": "./src/services.ts",
+    "./wallet": "./src/wallet.ts",
+    "./contracts": "./src/contracts.ts",
+    "./session": "./src/session.ts"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/compact-js": "3.0.0",
+    "@midnight-ntwrk/compact-runtime": "0.21.0",
+    "@midnight-ntwrk/midnight-js-contracts": "5.0.0",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "5.0.0",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "5.0.0",
+    "@midnight-ntwrk/midnight-js-node-zk-config-provider": "5.0.0",
+    "@midnight-ntwrk/midnight-js-types": "5.0.0",
+    "@midnight-ntwrk/testkit-js": "5.0.0",
+    "@midnightntwrk/ledger-v9": "1.0.1",
+    "@native-token-converter/toolchain": "0.1.0"
+  }
+}
