@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Compiles the contract into contracts/managed.
- *
- * The pinned compiler is fetched if it is not already here, so a clone plus
- * Node is enough to build, and what gets built is what this repository was
- * written against. Which version that is, where it comes from and the digest
- * every download must match before it is unpacked are in scripts/toolchain.ts.
- *
- * Proving keys are skipped unless --with-proving-keys is passed: they take
- * minutes and megabytes, and are needed only to deploy or to prove.
+ * Finds the pinned Compact compiler, fetching it into this package's cache the
+ * first time, and returns its path. COMPACTC, when set, names a compiler to use
+ * instead. Every download is checked against its published digest before it is
+ * unpacked.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -22,22 +17,12 @@ import {
   readdirSync,
   renameSync,
   rmSync,
-  writeFileSync,
 } from 'node:fs';
 import { arch, platform } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import {
-  COMPACTC_VERSION,
-  digestProblem,
-  releaseAsset,
-  releaseUrl,
-  reportedVersion,
-  wrongVersion,
-} from './toolchain.js';
+import { join, resolve } from 'node:path';
+import { COMPACTC_VERSION, digestProblem, releaseAsset, releaseUrl } from './toolchain.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const SOURCE = join(ROOT, 'contracts', 'src', 'NativeTokenConverter.compact');
-const OUTPUT = join(ROOT, 'contracts', 'managed');
 /*
  * THE CACHE IS KEYED BY VERSION AND BY PLATFORM, AND THAT IS NOT TIDINESS.
  *
@@ -73,7 +58,10 @@ function fetchCompiler(): string {
     ['--fail', '--location', '--silent', '--show-error', '--output', archive, releaseUrl(asset)],
     { stdio: 'inherit' },
   );
-  const problem = digestProblem(asset, createHash('sha256').update(readFileSync(archive)).digest('hex'));
+  const problem = digestProblem(
+    asset,
+    createHash('sha256').update(readFileSync(archive)).digest('hex'),
+  );
   if (problem !== undefined) {
     throw new Error(problem);
   }
@@ -88,7 +76,7 @@ function fetchCompiler(): string {
   return join(CACHE, 'compactc');
 }
 
-function compiler(): string {
+export function compiler(): string {
   const supplied = process.env['COMPACTC'];
   if (supplied !== undefined && supplied !== '') {
     return supplied;
@@ -96,27 +84,3 @@ function compiler(): string {
   const cached = join(CACHE, 'compactc');
   return existsSync(cached) ? cached : fetchCompiler();
 }
-
-const compactc = compiler();
-const printed = execFileSync(compactc, ['--version'], { encoding: 'utf8' }).trim();
-const found = reportedVersion(printed);
-if (found !== COMPACTC_VERSION) {
-  throw new Error(wrongVersion(printed));
-}
-
-const withProvingKeys = process.argv.includes('--with-proving-keys');
-rmSync(OUTPUT, { recursive: true, force: true });
-mkdirSync(OUTPUT, { recursive: true });
-execFileSync(compactc, [...(withProvingKeys ? [] : ['--skip-zk']), SOURCE, OUTPUT], {
-  stdio: 'inherit',
-  // zkir sits beside the compiler and is found on the path.
-  env: { ...process.env, PATH: `${dirname(compactc)}:${process.env['PATH'] ?? ''}` },
-});
-
-// The generated code is ESM and lands in a directory with no package.json of
-// its own, so Node has to be told what it is looking at.
-writeFileSync(join(OUTPUT, 'package.json'), `${JSON.stringify({ type: 'module' }, null, 2)}\n`);
-
-console.log(
-  `compiled with Compact ${found}${withProvingKeys ? ', with proving keys' : ', without proving keys'}`,
-);

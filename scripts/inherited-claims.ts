@@ -58,12 +58,9 @@ export interface Reproduction {
  * underneath.
  *
  * The examples that would make that concrete are deliberately not written out.
- * This file is read by the check it defines, and the first draft of this
- * paragraph quoted the module to illustrate the point and was refused by it.
- * That is not an awkwardness to work around: a guard spelled out in the words
- * it forbids has published them in the act of forbidding them, which is the
- * same reason the list of words this repository will not commit is kept
- * outside it.
+ * This file is read by the check it defines, so quoting the notice here would
+ * be refused by it, and rightly: a guard spelled out in the words it forbids
+ * has published them in the act of forbidding them.
  */
 export const RUN_LENGTH = 6;
 

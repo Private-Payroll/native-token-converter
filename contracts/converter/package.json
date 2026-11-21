@@ -1,0 +1,11 @@
+{
+  "name": "@native-token-converter/contract",
+  "version": "0.1.0",
+  "description": "The converter contract, its compile script and its tests.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@native-token-converter/toolchain": "0.1.0"
+  }
+}

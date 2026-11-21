@@ -47,7 +47,7 @@ published, the report is credited in it unless you ask otherwise.
 
 ## What is in scope
 
-The contract in `contracts/src`, the checks in `src` and `scripts` that decide
+The contract in `contracts/converter`, the client in `packages/library`, the checks in `scripts` that decide
 what this repository claims about itself, and the documentation where it
 describes what the software does.
 

@@ -1,0 +1,12 @@
+{
+  "name": "@native-token-converter/toolchain",
+  "version": "0.1.0",
+  "description": "The one place every tool version is pinned, and the fetch of the pinned compiler.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/toolchain.ts",
+    "./compiler": "./src/compiler.ts"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "native-token-converter",
+  "version": "0.1.0",
+  "description": "Wrap an unshielded Midnight token into a shielded one, and redeem it back, with one pool per backing colour.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Private-Payroll/native-token-converter.git"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp ../../LICENSE ../../README.md .",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.21.0"
+  }
+}

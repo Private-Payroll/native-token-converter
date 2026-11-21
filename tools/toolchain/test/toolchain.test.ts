@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   COMPACTC_SHA256,
@@ -13,11 +10,11 @@ import {
   releaseUrl,
   reportedVersion,
   wrongVersion,
-} from '../scripts/toolchain.js';
+} from '../src/toolchain.js';
 
 describe('the pinned toolchain', () => {
   it('is the compiler version the README shows a reader', () => {
-    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+    const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
     expect(readme).toContain(`badge/Compact-${COMPACTC_VERSION}-`);
   });
 
@@ -26,7 +23,9 @@ describe('the pinned toolchain', () => {
   });
 
   it('picks the asset for the machine it is asked about', () => {
-    expect(releaseAsset('darwin', 'arm64')).toBe(`compactc_v${COMPACTC_VERSION}_aarch64-darwin.zip`);
+    expect(releaseAsset('darwin', 'arm64')).toBe(
+      `compactc_v${COMPACTC_VERSION}_aarch64-darwin.zip`,
+    );
     expect(releaseAsset('darwin', 'x64')).toBe(`compactc_v${COMPACTC_VERSION}_x86_64-darwin.zip`);
     expect(releaseAsset('linux', 'arm64')).toBe(
       `compactc_v${COMPACTC_VERSION}_aarch64-unknown-linux-musl.zip`,
@@ -92,7 +91,9 @@ describe('the pinned toolchain', () => {
     const asset = releaseAsset('linux', 'x64');
     const published = COMPACTC_SHA256[asset] ?? '';
     expect(digestProblem(asset, published)).toBeUndefined();
-    expect(digestProblem(asset, '0'.repeat(64))).toMatch(/does not match the digest its release published/);
+    expect(digestProblem(asset, '0'.repeat(64))).toMatch(
+      /does not match the digest its release published/,
+    );
   });
 
   it('refuses a digest that differs only in its last character, or only in its case', () => {
@@ -107,22 +108,5 @@ describe('the pinned toolchain', () => {
     expect(digestProblem('compactc_v9.9.9_x86_64-darwin.zip', '0'.repeat(64))).toMatch(
       /no published digest/,
     );
-  });
-});
-
-describe('the compile script', () => {
-  it('stops before building anything when the compiler it is given is not the pinned one', () => {
-    const folder = mkdtempSync(join(tmpdir(), 'compiler-'));
-    const fake = join(folder, 'compactc');
-    writeFileSync(fake, '#!/bin/sh\necho "0.0.1 (0000000 2000-01-01)"\n');
-    chmodSync(fake, 0o755);
-    const run = (): string =>
-      execFileSync(process.execPath, ['--import', 'tsx', 'scripts/compile.ts'], {
-        cwd: join(import.meta.dirname, '..'),
-        env: { ...process.env, COMPACTC: fake },
-        encoding: 'utf8',
-        stdio: 'pipe',
-      });
-    expect(run).toThrow(/written against Compact compiler .* and found 0\.0\.1/);
   });
 });

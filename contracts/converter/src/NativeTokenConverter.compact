@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-pragma language_version >= 0.26.0;
+pragma language_version 0.28.0;
 
 import CompactStandardLibrary;
-import "../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily"
+import "../../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily"
   prefix Token_;
 
 // The family metadata is re-exported so it is readable by name from public
 // state. Nothing here can change it after construction.
 import { _name, _symbol, _decimals, _isInitialized }
-  from "../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily";
+  from "../../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily";
 export { _name, _symbol, _decimals, _isInitialized };
 
 // `decimals` is fixed at 0 and it is not a display convention this contract can

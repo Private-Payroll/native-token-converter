@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   NOTICES_EXPECTED,
@@ -12,13 +13,15 @@ import {
   runsOf,
   significantWords,
 } from '../scripts/inherited-claims.js';
-import { PUBLISHED } from '../scripts/publishable.js';
+import { repositoryFiles } from '../scripts/repository-files.js';
+
+const ROOT = resolve(import.meta.dirname, '..');
 
 /**
  * The invented text below is deliberate nonsense.
  *
- * This file is published, so the walk at the bottom reads it along with
- * everything else. A fixture written in the words of the real notice would be
+ * This file is in the repository, so the walk at the bottom reads it along
+ * with everything else. A fixture written in the words of the real notice would be
  * refused by the check it is testing, and the tidy way out of that is an
  * exception for this file, which is the beginning of a check that no longer
  * covers the thing it was written for. Nonsense costs nothing and needs no
@@ -46,16 +49,13 @@ const invented = (text: string) =>
     run.text
       .split(/(?=@[A-Za-z]+\b)/)
       .map((clause) => clause.replace(/\s+/g, ' ').trim())
-      .filter((clause) =>
-        INVENTED_MARKERS.every((marker) => clause.toLowerCase().includes(marker)),
-      )
+      .filter((clause) => INVENTED_MARKERS.every((marker) => clause.toLowerCase().includes(marker)))
       .map((clause) => ({ source: 'invented', line: run.line, text: clause })),
   );
 
 describe('reading words out of a text', () => {
-  // Red when significantWords stops lowering case, or stops treating
-  // punctuation and backticks as gaps: watched, by removing .toLowerCase() and
-  // then by narrowing the character class to whitespace.
+  // Words are compared in lower case, with punctuation and backticks treated as gaps, so a notice
+  // is recognised however it was capitalised or quoted.
   it('lowers case and treats everything but letters and digits as a gap', () => {
     expect(significantWords('A Barrow, `tipped`; twice-over.')).toEqual([
       'a',
@@ -72,12 +72,10 @@ describe('reading words out of a text', () => {
 });
 
 describe('reading a comment as the paragraph it is', () => {
-  // Red when commentRuns reads line by line instead of joining a run: watched,
-  // by making it push one entry per comment line.
+  // A comment written over several lines is read as one paragraph, because a sentence wrapped
+  // across lines is still one sentence.
   it('joins consecutive comment lines into one run, and says where it starts', () => {
-    expect(commentRuns('code\n// one\n// two\ncode\n')).toEqual([
-      { line: 2, text: 'one two' },
-    ]);
+    expect(commentRuns('code\n// one\n// two\ncode\n')).toEqual([{ line: 2, text: 'one two' }]);
   });
 
   it('closes the run at the last line of a file', () => {
@@ -90,9 +88,8 @@ describe('reading a comment as the paragraph it is', () => {
 });
 
 describe('finding the notice in a module', () => {
-  // Red when the clause is no longer cut at its tags, because the requirements
-  // listed further down the same comment then come back with it: watched, by
-  // matching against the whole comment run, which drags in the quarry line.
+  // Only the notice itself is kept, cut at its tags, so the requirements listed further down the
+  // same comment are not mistaken for part of it.
   it('keeps the notice and not the paragraphs around it', () => {
     const [notice] = invented(INVENTED);
     expect(notice?.text).toBe(
@@ -101,12 +98,10 @@ describe('finding the notice in a module', () => {
   });
 
   /**
-   * Both halves, against the real markers rather than the invented ones.
-   *
-   * The first draft of this put the invented text to `retractedNotices`, which
-   * carries neither real marker, so it returned nothing whether the markers
-   * were required together or singly. It passed, and it could not have failed.
-   * A mutation run is what said so.
+   * A notice is retracted only when it carries every marker together. Each half
+   * on its own is an ordinary sentence and must not be refused. This is tested
+   * against the real markers, because the invented text carries neither of them
+   * and would pass whichever way the markers were combined.
    */
   it('needs every marker, not one of them', () => {
     const half = '// @notice The barrow is the only copy of the gravel.';
@@ -115,9 +110,8 @@ describe('finding the notice in a module', () => {
     expect(retractedNotices('x', otherHalf)).toEqual([]);
   });
 
-  // Red when the markers are looked for anywhere but inside the clause:
-  // watched, by matching with startsWith, at which a clause beginning with its
-  // tag carries no marker and nothing is ever found.
+  // The markers are looked for anywhere inside the clause, not only at its start, which is where a
+  // clause beginning with its tag would never have them.
   it('finds one that carries both', () => {
     const whole =
       '// @notice The barrow is the only copy, and a quarry cannot find it by scanning the chain.';
@@ -128,8 +122,8 @@ describe('finding the notice in a module', () => {
 describe('what counts as reproducing one', () => {
   const notices = invented(INVENTED);
 
-  // Red when reproductions stops reading across lines: watched, by reading the
-  // file line by line, which misses a claim that arrives wrapped.
+  // A copied claim that wraps over two lines is still found, because prose is rewrapped freely when
+  // it is edited.
   it('finds a run that arrives wrapped over two lines', () => {
     const found = reproductions(
       'somewhere.md',
@@ -140,8 +134,8 @@ describe('what counts as reproducing one', () => {
     expect(found[0]?.line).toBe(2);
   });
 
-  // Red when RUN_LENGTH is lowered: watched, by setting it to 4, at which the
-  // five words below are enough and this passes when it should not.
+  // Five shared words in a row are not enough to count as reproducing a notice, so ordinary phrases
+  // in common do not refuse.
   it('says nothing about a run shorter than the length', () => {
     expect(reproductions('somewhere.md', 'the returned barrow is the', notices)).toEqual([]);
   });
@@ -152,8 +146,7 @@ describe('what counts as reproducing one', () => {
     ).toEqual([]);
   });
 
-  // Red when runsOf stops carrying the source through: watched, by having it
-  // record a constant, so a reader is told a run was found and not where from.
+  // Each run found says which notice it came from, so the reader can go and compare the two.
   it('reports which notice the run came from', () => {
     const found = reproductions('somewhere.md', 'the returned barrow is the sole barrow', notices);
     expect(found[0]?.source).toBe('invented');
@@ -170,10 +163,9 @@ describe('what counts as reproducing one', () => {
  * replaced wholesale by one, so the way the check below stops working is by
  * having nothing to check, and an empty corpus passes everything.
  *
- * Red when the module is bumped, reworded, renamed or simply not installed, and
- * that is the intent rather than a cost: each of those is a reason to open
- * those notices and read them again. Watched, by deleting a notice from a copy
- * of the module outside this repository and by emptying the copy altogether.
+ * So these tests fail when the module is updated, reworded, renamed or not
+ * installed at all. That is intended: each of those is a reason to open the
+ * notices and read them again before trusting the check.
  */
 describe('the notices this repository is answering', () => {
   const notices = NOTICE_SOURCES.flatMap((source) =>
@@ -189,15 +181,16 @@ describe('the notices this repository is answering', () => {
   });
 
   /**
-   * The one that matters, and the reason for all of the above.
-   *
-   * Red when any published file reproduces a notice. Watched, by putting the
-   * sentence back into copies of README.md and of the contract, outside this
-   * repository, where it stood before it was replaced.
+   * The one that matters, and the reason for all of the above: no file in this
+   * repository repeats the token module's notice that a minted coin cannot be
+   * found by its owner. That is not true of the coins this contract mints, and a
+   * reader who believed it would think money is lost when it is not.
    */
-  it('finds no published file reproducing one', () => {
-    const found = PUBLISHED.flatMap((path) =>
-      reproductions(path, readFileSync(path, 'utf8'), notices),
+  it('finds no file in the repository reproducing one', () => {
+    const files = repositoryFiles(ROOT);
+    expect(files).toContain('README.md');
+    const found = files.flatMap((path) =>
+      reproductions(path, readFileSync(join(ROOT, path), 'utf8'), notices),
     );
     expect(found).toEqual([]);
   });

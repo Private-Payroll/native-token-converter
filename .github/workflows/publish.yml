@@ -10,9 +10,9 @@ name: publish
 # trust a publisher for a package that already exists on the registry, so the
 # first version is published once by other means and every later one here.
 #
-# While package.json marks the package private, npm refuses to publish it and
-# the last step fails. That is deliberate: nothing is published until the
-# package has its name.
+# While packages/library/package.json marks the package private, npm refuses
+# to publish it and the last step fails. That is deliberate: nothing is
+# published until the package has its name.
 #
 # Two jobs, so the identity that can publish never shares a machine with the
 # installs, the compiler download and the tests: the first builds and checks
@@ -46,16 +46,16 @@ jobs:
           node-version: '22'
       # A tag that names another version would publish one version under the
       # name of another, and a published version cannot be replaced.
-      - name: refuse a tag that is not the version package.json carries
+      - name: refuse a tag that is not the version the library carries
         run: |
-          VERSION="v$(node -p "require('./package.json').version")"
+          VERSION="v$(node -p "require('./packages/library/package.json').version")"
           if [ "$GITHUB_REF_NAME" != "$VERSION" ]; then
-            echo "the tag is $GITHUB_REF_NAME and package.json says $VERSION; tag the version package.json carries" >&2
+            echo "the tag is $GITHUB_REF_NAME and packages/library/package.json says $VERSION; tag the version it carries" >&2
             exit 1
           fi
-      # Work reaches main only through a pull request, where the title, the
-      # static analysis and the dependency review ran. A tag on any other
-      # commit would publish work nobody reviewed.
+      # Work reaches main only through a pull request, where the static
+      # analysis and the dependency review ran. A tag on any other commit
+      # would publish work nobody reviewed.
       - name: refuse a tag on a commit that is not on main
         run: |
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
@@ -64,10 +64,7 @@ jobs:
           fi
       - run: npm ci
       - run: npm run verify
-      - name: read what is tracked
-        run: git ls-files > "$RUNNER_TEMP/tracked"
-      - run: npx tsx scripts/check-publishable.ts --tracked "$RUNNER_TEMP/tracked"
-      - run: npm pack
+      - run: npm pack --workspace packages/library
       # actions/upload-artifact v4.6.2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

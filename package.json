@@ -1,6 +1,5 @@
 {
-  "name": "native-token-converter",
-  "version": "0.1.0",
+  "name": "native-token-converter-workspace",
   "description": "Wrap an unshielded Midnight token into a shielded one, and redeem it back, with one pool per backing colour.",
   "license": "Apache-2.0",
   "repository": {
@@ -12,34 +11,32 @@
   "engines": {
     "node": ">=22"
   },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist"
+  "workspaces": [
+    "contracts/*",
+    "packages/*",
+    "apps/*",
+    "tools/*"
   ],
   "scripts": {
-    "compact": "tsx scripts/compile.ts",
+    "compact": "tsx contracts/converter/scripts/compile.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run build --workspace packages/library",
+    "format": "prettier --write .",
     "test": "vitest run",
     "self-contained": "tsx scripts/check-self-contained.ts",
-    "publishable": "tsx scripts/check-publishable.ts",
-    "verify": "npm run compact && npm run build && npm run self-contained && npm run publishable && npm run typecheck && vitest run",
-    "pretest": "npm run compact",
-    "prepack": "npm run build"
-  },
-  "dependencies": {
-    "@midnight-ntwrk/compact-runtime": "0.21.0"
+    "verify": "prettier --check . && npm run compact && npm run build && npm run self-contained && npm run typecheck && vitest run",
+    "pretest": "npm run compact"
   },
   "devDependencies": {
     "@openzeppelin/compact-contracts": "0.4.0-alpha.1",
     "@types/node": "22.20.1",
+    "prettier": "3.10.1",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "4.1.12"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "printWidth": 100
   }
 }
