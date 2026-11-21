@@ -1,0 +1,35 @@
+name: Something should be different
+description: A change to what the contract or the library does, or something it should do and does not.
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        **Read `README.md` first.** What the contract does not decide is set out
+        there on purpose, and the most useful proposal names the property it
+        would change and what has changed since that property was chosen.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What is hard or impossible today. Describe the situation, not the
+        solution: a proposal that starts from the fix hides whether there is a
+        better one.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: What should be different, and what somebody could do afterwards that they cannot do now.
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: What it would cost
+      description: >-
+        What else would have to change, and what could be lost. The contract is
+        immutable once deployed, so a change to it is a new contract that every
+        holder has to move to.

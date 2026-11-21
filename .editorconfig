@@ -1,0 +1,23 @@
+# The formatting every editor here agrees on, so a diff shows what changed
+# rather than who opened the file. The values are what the files already use:
+# LF endings, two-space indentation and a final newline. Prettier decides the
+# rest when `npm run format` runs.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# A commit subject is at most 72 characters and its body is wrapped at 72.
+[COMMIT_EDITMSG]
+max_line_length = 72
+
+# Two trailing spaces are a line break in Markdown, and trimming them silently
+# changes the rendered text.
+[*.md]
+trim_trailing_whitespace = false

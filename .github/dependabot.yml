@@ -1,0 +1,58 @@
+# What is watched for updates, and what is deliberately not.
+#
+# The Compact compiler is pinned in tools/toolchain/src/toolchain.ts and Node
+# in .nvmrc. Neither is a package, nothing here moves them, and moving either
+# is a change somebody makes on purpose and the checks then judge.
+#
+# Every package is pinned to one exact version and a package named in two
+# workspaces, or in the overrides, to the same version in each; the tests
+# refuse anything else, so an update that moves one copy and not another fails
+# its own pull request.
+
+version: 2
+
+updates:
+  # One lockfile installs every workspace, so the root is the one place to
+  # watch.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # The type definitions follow the Node major in .nvmrc, which moves on
+    # purpose, not with an update.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      # One pull request for the routine ones. Reviewing many separate patch
+      # bumps is how a real change gets waved through in the middle of them.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+
+  # The actions the checks and the publishing run on, which are pinned to
+  # commits. The shared setup is a folder of its own and is named here so its
+  # pins move with the workflows'.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/setup
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    # One pull request moves an action in every folder that pins it, so no two
+    # pins of one action are ever checked apart.
+    groups:
+      actions:
+        group-by: dependency-name
+        patterns:
+          - '*'
+    commit-message:
+      prefix: ci
+      include: scope

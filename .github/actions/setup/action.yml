@@ -1,0 +1,44 @@
+name: set up a clone
+description: >
+  Everything a fresh clone needs before a check can run: the pinned Node, the
+  installed packages, the pinned compiler and, unless a job compiles its own,
+  the compiled contract.
+
+# Each check is its own job, so a pull request shows which one failed without
+# anybody opening a log. Every job starts on a fresh machine, so every job does
+# this first. Written once here, the jobs cannot drift apart.
+#
+# Every action is pinned to a commit rather than a tag, because a tag can be
+# moved and what it points at would then run here without a pull request.
+
+inputs:
+  compile:
+    description: Compile the contract without proving keys, for the checks that read its build.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    # The Node version is the one in .nvmrc, and nowhere else.
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+
+    # The compiler is a release download, not a package,
+    # so it is kept between runs under a key that changes when its pin does.
+    - name: reuse the pinned compiler if it has been fetched before
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: tools/toolchain/.compactc
+        key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
+
+    - name: install exactly what the lockfile pins
+      shell: bash
+      run: npm ci
+
+    - name: compile the contract
+      if: inputs.compile == 'true'
+      shell: bash
+      run: npm run compact

@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Anything that could lose somebody money
+    url: https://github.com/Private-Payroll/native-token-converter/security/advisories/new
+    about: >-
+      Do not open a public issue. The contract is immutable once deployed, so a
+      public hint is a window in which a defect is known and nothing can be done.
+      Report it privately here; SECURITY.md says what happens next.
+  - name: A problem with how somebody is behaving here
+    url: https://github.com/Private-Payroll/native-token-converter/security/advisories/new
+    about: >-
+      The same private channel, because it is the only one this repository has.
+      Put "conduct" in the title so it is not read as a defect report.
+      CODE_OF_CONDUCT.md says what happens next.

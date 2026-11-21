@@ -1,0 +1,4 @@
+# Who is asked to review a pull request. Every file has the same owner: the
+# repository is small, and the contract, its client and the checks that decide
+# what the repository claims about itself are read together.
+* @nooblemon-eth

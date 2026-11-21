@@ -1,0 +1,38 @@
+name: dependencies
+
+# WHAT A DEPENDENCY BRINGS WITH IT, READ BEFORE IT IS MERGED RATHER THAN AFTER.
+# The packages installed here are few and that is deliberate; the point of
+# this check is the next one, added by somebody who did not weigh what it pulls
+# in. A contract repository that takes an unvetted dependency has widened its
+# trust boundary without saying so.
+#
+# It compares a pull request with the branch it targets, so it has nothing to
+# read on a push. It is a workflow of its own, started only by a pull request,
+# so a push to main lists no skipped check.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependencies-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependencies:
+    name: dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: low
+          comment-summary-in-pr: on-failure
