@@ -18,6 +18,10 @@ const manifest = JSON.parse(read('package.json')) as {
   readonly scripts: Readonly<Record<string, string>>;
   readonly exports: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly dependencies: Readonly<Record<string, string>>;
+};
+const workspace = JSON.parse(
+  readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+) as {
   readonly devDependencies: Readonly<Record<string, string>>;
 };
 const build = JSON.parse(read('tsconfig.build.json')) as {
@@ -34,9 +38,11 @@ const importedByTheLibrary = (): Set<string> => {
   const names = new Set<string>();
   for (const file of readdirSync(new URL('../src', import.meta.url))) {
     const source = read(`src/${file}`);
-    for (const [, specifier] of source.matchAll(/(?:from|import|require)\s*\(?\s*['"]([^'".][^'"]*)['"]/g)) {
+    for (const [, specifier] of source.matchAll(
+      /(?:from|import|require)\s*\(?\s*['"]([^'".][^'"]*)['"]/g,
+    )) {
       const parts = (specifier ?? '').split('/');
-      names.add(parts[0]?.startsWith('@') ? `${parts[0]}/${parts[1]}` : (parts[0] ?? ''));
+      names.add(parts[0]?.startsWith('@') ? `${parts[0]}/${String(parts[1])}` : (parts[0] ?? ''));
     }
   }
   return names;
@@ -74,7 +80,7 @@ describe('the published package', () => {
   });
 
   it('pins every tool it is built and checked with to one exact version', () => {
-    for (const version of Object.values(manifest.devDependencies)) {
+    for (const version of Object.values(workspace.devDependencies)) {
       expect(version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
     }
   });

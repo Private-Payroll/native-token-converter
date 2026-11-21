@@ -19,13 +19,11 @@ const HEX_32 = /^[0-9a-f]{64}$/;
  * comes to believe a note is backed by something it is not.
  */
 export function normaliseAddress(converterAddress: string): string {
-  const bare = converterAddress.startsWith('0x')
-    ? converterAddress.slice(2)
-    : converterAddress;
+  const bare = converterAddress.startsWith('0x') ? converterAddress.slice(2) : converterAddress;
   const lower = bare.toLowerCase();
   if (!HEX_32.test(lower)) {
     throw new Error(
-      `a converter address is ${ADDRESS_HEX_LENGTH} hex characters; got ${JSON.stringify(converterAddress)}`,
+      `a converter address is ${String(ADDRESS_HEX_LENGTH)} hex characters; got ${JSON.stringify(converterAddress)}`,
     );
   }
   return lower;
@@ -33,7 +31,7 @@ export function normaliseAddress(converterAddress: string): string {
 
 function requireColour(bytes: Uint8Array, what: string): Uint8Array {
   if (bytes.length !== COLOUR_BYTES) {
-    throw new Error(`a ${what} is ${COLOUR_BYTES} bytes; got ${bytes.length}`);
+    throw new Error(`a ${what} is ${String(COLOUR_BYTES)} bytes; got ${String(bytes.length)}`);
   }
   return bytes;
 }
@@ -49,10 +47,7 @@ function requireColour(bytes: Uint8Array, what: string): Uint8Array {
  * circuit on chain, which is why the contract does not offer it and every client
  * is expected to compute it.
  */
-export function wrappedColour(
-  backingColour: Uint8Array,
-  converterAddress: string,
-): Uint8Array {
+export function wrappedColour(backingColour: Uint8Array, converterAddress: string): Uint8Array {
   return encodeRawTokenType(
     rawTokenType(
       requireColour(backingColour, 'backing colour'),
@@ -75,10 +70,7 @@ export function isWrappedNoteOf(
   backingColour: Uint8Array,
   converterAddress: string,
 ): boolean {
-  const expected = requireColour(
-    wrappedColour(backingColour, converterAddress),
-    'derived colour',
-  );
+  const expected = requireColour(wrappedColour(backingColour, converterAddress), 'derived colour');
   const actual = requireColour(noteColour, 'note colour');
   // Both sides are length-checked, including the one this function derived:
   // comparing every byte of an array shorter than expected is vacuously true,

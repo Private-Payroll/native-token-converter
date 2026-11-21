@@ -18,8 +18,8 @@ import {
   sampleUserAddress,
 } from '@midnight-ntwrk/compact-runtime';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Contract } from '../contracts/managed/contract/index.js';
-import { isWrappedNoteOf, wrappedColour } from '../src/wrapped-colour.js';
+import { Contract } from '../managed/contract/index.js';
+import { isWrappedNoteOf, wrappedColour } from '../../../packages/library/src/wrapped-colour.js';
 
 interface Coin {
   readonly nonce: Uint8Array;
@@ -120,7 +120,7 @@ describe('the converter', () => {
   ) => contract.impureCircuits.wrap(context('wrap'), colour, amount, to, freshNonce());
 
   const redeem = async (coin: Coin, colour: Uint8Array = backing, to = sampleUserAddress()) =>
-    contract.impureCircuits.redeem(context('redeem'), colour, coin as never, {
+    contract.impureCircuits.redeem(context('redeem'), colour, coin, {
       bytes: encodeUserAddress(to),
     });
 
@@ -141,7 +141,7 @@ describe('the converter', () => {
       expect([...effects.shieldedMints.entries()]).toEqual([[hex(backing), 1234n]]);
     });
 
-    it('mints a note a client then recognises as this pool\'s', async () => {
+    it("mints a note a client then recognises as this pool's", async () => {
       const { result } = await wrap(1234n);
       expect(isWrappedNoteOf(result.color, backing, converterAddress)).toBe(true);
       expect(isWrappedNoteOf(result.color, someColour(), converterAddress)).toBe(false);

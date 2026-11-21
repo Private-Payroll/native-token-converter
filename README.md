@@ -2,7 +2,7 @@
 
 [![check](https://github.com/Private-Payroll/native-token-converter/actions/workflows/ci.yml/badge.svg)](https://github.com/Private-Payroll/native-token-converter/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Compact](https://img.shields.io/badge/Compact-0.36.1-informational.svg)](scripts/toolchain.ts)
+[![Compact](https://img.shields.io/badge/Compact-0.36.1-informational.svg)](tools/toolchain/src/toolchain.ts)
 
 A Midnight contract that takes in an unshielded token and hands back a shielded
 note standing for it, and takes that note back and returns the token. Two
@@ -22,10 +22,9 @@ which colour came in, which went out, how much of each, and where it went. That
 is not the same as a node accepting the transaction, and nobody should treat it
 as such until it has.
 
-What has been done to it, so the claim above can be read in proportion: every
-assertion names the change that turns it red and was watched doing so, 41
-mutations of the contract and its client were run against the suite with 40
-turning a named assertion red, and the one that stays green is documented in
+What has been done to it, so the claim above can be read in proportion: the
+code was broken on purpose 41 times, in the contract and its client, and the
+suite failed on 40 of them, and the one that stays green is documented in
 place with the reason rather than removed. Two independent review passes were
 run over the work by readers other than its author; both found defects, one of
 them a redemption to the zero address that would have destroyed a holder's
@@ -131,11 +130,11 @@ tokenType(backingColour, converterAddress)
 ```
 
 - a function of the coin being wrapped and of the contract's own address, and of
-nothing else. So there is exactly one pool per backing token, the first person to
-wrap that token brings its pool into existence, and everybody after uses that
-same pool because arithmetic offers no second one. Creating a pool is not an act
-with a decision in it, and there is no list of permitted assets, no registry, and
-nobody - including whoever deployed the contract - who could add to one.
+  nothing else. So there is exactly one pool per backing token, the first person to
+  wrap that token brings its pool into existence, and everybody after uses that
+  same pool because arithmetic offers no second one. Creating a pool is not an act
+  with a decision in it, and there is no list of permitted assets, no registry, and
+  nobody - including whoever deployed the contract - who could add to one.
 
 The same fact does the safety work. `backing` is supplied once per call and
 drives both halves: on the way in it is the colour received and the domain minted
@@ -181,10 +180,10 @@ The colour derivation is free off chain and would cost an entire circuit on
 chain, so the contract does not offer it and clients are expected to compute it.
 
 This is not published to a package registry yet. It is one short TypeScript
-file, `src/wrapped-colour.ts`; clone the repository, or copy the file.
+file, `packages/library/src/wrapped-colour.ts`; clone the repository, or copy the file.
 
 ```ts
-import { isWrappedNoteOf, wrappedColour } from './src/wrapped-colour.js';
+import { isWrappedNoteOf, wrappedColour } from './packages/library/src/wrapped-colour.js';
 
 // The colour this converter mints against that backing token.
 const colour = wrappedColour(backingColour, converterAddress);
@@ -204,8 +203,9 @@ npm install
 npm run verify
 ```
 
-`verify` compiles the contract, builds the client library, checks that every
-path this repository cites is in it, typechecks, and runs the tests. The tests run the compiled circuits and
+`verify` checks the formatting, compiles the contract, builds the client
+library, checks that every path this repository cites is in it, typechecks,
+lints, and runs the tests. The tests run the compiled circuits and
 read the ledger effects they produce, so what they check is what the chain would
 be asked to do.
 
@@ -213,7 +213,7 @@ The Compact compiler is pinned, and fetched on first use if it is not already
 here, so a clone, Node 22 or newer, and `curl` and `unzip` are enough. Every
 download is checked against the digest its release published before it is
 unpacked. The pinned version, where it comes from and those digests are in
-`scripts/toolchain.ts`. There is a pinned compiler for macOS and Linux only; on
+`tools/toolchain/src/toolchain.ts`. There is a pinned compiler for macOS and Linux only; on
 anything else the build refuses rather than guessing, and `COMPACTC` can point
 at one you installed yourself. Proving keys
 are skipped by default because they take minutes and are needed only to deploy or

@@ -2,11 +2,15 @@
 
 /**
  * The colour a client derives. That it agrees with the colour the contract
- * actually mints is checked in test/converter.test.ts, against the running
+ * actually mints is checked in contracts/converter/test/converter.test.ts, against the running
  * circuit; this is about the shapes it accepts and refuses on the way there.
  */
 
-import { encodeRawTokenType, sampleContractAddress, sampleRawTokenType } from '@midnight-ntwrk/compact-runtime';
+import {
+  encodeRawTokenType,
+  sampleContractAddress,
+  sampleRawTokenType,
+} from '@midnight-ntwrk/compact-runtime';
 import { describe, expect, it } from 'vitest';
 import { isWrappedNoteOf, normaliseAddress, wrappedColour } from '../src/wrapped-colour.js';
 
@@ -24,7 +28,7 @@ describe('the colour a converter mints against a backing colour', () => {
   it('changes when the converter changes', () => {
     const backing = someColour();
     expect(hex(wrappedColour(backing, sampleContractAddress()))).not.toBe(
-      hex(wrappedColour(backing, sampleContractAddress()))
+      hex(wrappedColour(backing, sampleContractAddress())),
     );
   });
 

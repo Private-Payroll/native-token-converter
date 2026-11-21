@@ -4,12 +4,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sampleContractAddress } from '@midnight-ntwrk/compact-runtime';
 import { describe, expect, it } from 'vitest';
-import { Contract, ledger } from '../contracts/managed/contract/index.js';
-import { COMPACTC_VERSION } from '../scripts/toolchain.js';
+import { Contract, ledger } from '../managed/contract/index.js';
+import { COMPACTC_VERSION } from '@native-token-converter/toolchain';
 
 interface Argument {
   readonly name: string;
-  readonly type: { readonly 'type-name': string; readonly length?: number; readonly maxval?: string };
+  readonly type: {
+    readonly 'type-name': string;
+    readonly length?: number;
+    readonly maxval?: string;
+  };
 }
 interface CircuitInfo {
   readonly name: string;
@@ -29,7 +33,7 @@ interface ContractInfo {
 // see the off-by-one it exists to catch.
 const info = JSON.parse(
   readFileSync(
-    join(import.meta.dirname, '..', 'contracts', 'managed', 'compiler', 'contract-info.json'),
+    join(import.meta.dirname, '..', 'managed', 'compiler', 'contract-info.json'),
     'utf8',
   ).replace(/"maxval":\s*(\d+)/g, '"maxval": "$1"'),
 ) as ContractInfo;
@@ -37,7 +41,10 @@ const info = JSON.parse(
 // The runtime the compiled contract is checked against is the one this package
 // installs, read from where it is pinned rather than written here a second time.
 const manifest = JSON.parse(
-  readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+  readFileSync(
+    join(import.meta.dirname, '..', '..', '..', 'packages', 'library', 'package.json'),
+    'utf8',
+  ),
 ) as { readonly dependencies: Readonly<Record<string, string>> };
 
 const circuit = (name: string): CircuitInfo => {
@@ -97,7 +104,7 @@ describe('redeem', () => {
 
   it('takes those three arguments and no fourth', () => {
     // What is burned and what is paid out being one and the same value is
-    // checked by running the circuit, in test/converter.test.ts. This only
+    // checked by running the circuit, in ./converter.test.ts. This only
     // holds the door shut on an amount argument appearing for it to disagree
     // with.
     expect(circuit('redeem').arguments).toHaveLength(3);

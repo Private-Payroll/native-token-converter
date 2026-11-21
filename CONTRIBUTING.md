@@ -2,22 +2,17 @@
 
 ## What gets checked
 
-`npm run verify` compiles the contract, builds the client library, checks that
-every path this repository cites is in it, checks that what is in the tree is
-exactly what this repository publishes, typechecks, and runs the tests. The workflow runs all of that, plus
-two things that need a pull request to exist: what git is tracking against the
-same publish list, and the pull request's own title, body and branch name held
-to what a commit message has to be.
-
-That last check assumes this repository squashes with **Pull request title and
-description** as the commit message, which is what makes the title the subject
-and the body the body.
+`npm run verify` checks the formatting, compiles the contract, builds the client
+library, checks that every path this repository cites is in it, typechecks,
+lints, and runs the tests. `npm run format` fixes the formatting. The
+workflow runs the same command on every pull request, along with static
+analysis and a review of any dependency the pull request adds.
 
 ## Naming a change
 
-A pull request title becomes the commit subject when the branch is squashed, so
-the title is held to what a subject line has to be, and the workflow fails the
-pull request if it is not:
+This repository squashes a pull request with its title and description as the
+commit message, so the title becomes the commit subject and is held to what a
+subject line has to be when it is merged:
 
 ```
 kind: what changed
@@ -25,22 +20,14 @@ kind: what changed
 
 - **kind** is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
   `refactor`, `test`. An optional scope goes in brackets: `fix(redeem): ...`.
-- What changed is lower case, imperative, and does not end with a full stop.
-- The whole subject is at most 72 characters.
+- What changed starts with a verb in the imperative and does not end with a
+  full stop.
+- The whole subject is at most 72 characters, counting the ` (#N)` the merge
+  adds after it.
 
 The branch name follows from the title: `feat: wrap a native token` belongs on
-`feat/wrap-a-native-token`. It is checked too, because it stays on the pull
-request page after the branch itself is gone.
-
-`scripts/commit-check.ts` is the file the workflow runs to do all of that, and
-you can run it yourself on anything you are about to write:
-
-```
-npx tsx scripts/commit-check.ts <file>
-```
-
-It prints the branch the change belongs on, or says what is wrong with the
-message and refuses.
+`feat/wrap-a-native-token`. A `build`, `ci` or `perf` change goes on a `chore`
+branch.
 
 A commit message here says what changed, not who changed it: no attribution
 trailers, and no address belonging to a person.
