@@ -34,16 +34,25 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      node: ${{ steps.node.outputs.version }}
     steps:
-      # actions/checkout v4.4.0, with the whole history so the tagged commit can
-      # be found on main.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      # The whole history, so the tagged commit can be found on main, and no
+      # token left in the working copy for the installs and the tests below to
+      # find.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      # actions/setup-node v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+          persist-credentials: false
+      # At the Node version in .nvmrc.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
+      # The publishing job has no checkout, so it is handed the same version.
+      - name: read the pinned Node version
+        id: node
+        run: echo "version=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
       # A tag that names another version would publish one version under the
       # name of another, and a published version cannot be replaced.
       - name: refuse a tag that is not the version the library carries
@@ -65,8 +74,7 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm pack --workspace packages/library
-      # actions/upload-artifact v4.6.2
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: package
           path: '*.tgz'
@@ -75,17 +83,16 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
     steps:
-      # actions/setup-node v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          node-version: ${{ needs.build.outputs.node }}
           registry-url: 'https://registry.npmjs.org'
-      # actions/download-artifact v4.3.0
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: package
       # Trusted publishing needs npm 11.5.1 or later, which Node 22 does not

@@ -1,9 +1,17 @@
 name: check
 
+# One job per check, so a pull request shows which check failed without anybody
+# opening a log, and each can be required on its own. Every step of
+# `npm run verify`, the one command a contributor runs, is run by a job here or
+# by the shared setup, and test/checks.test.ts refuses one that is not; keys,
+# local-chain and analyse run on top of those.
+
 on:
   push:
     branches: [main]
   pull_request:
+  # Starts every check by hand from the Actions page, for a commit whose run
+  # never started.
   workflow_dispatch:
 
 permissions:
@@ -11,77 +19,132 @@ permissions:
 
 concurrency:
   group: check-${{ github.ref }}
-  cancel-in-progress: true
+  # A second push to a branch under review stops the first run, which nobody is
+  # reading any more. A run on main is never stopped: a commit there would be
+  # left for good with no completed check against it.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every action is pinned to a commit rather than a tag, because a tag can be
+# moved. Every checkout leaves no token in the working copy: nothing here
+# pushes, so a token there would serve only code a pull request brought in.
+# Every job has a time limit, so a step that hangs stops instead of running for
+# hours.
 
 jobs:
-  build:
+  format:
+    name: format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: '22'
-          cache: npm
-      - name: reuse the pinned compiler if it has been fetched before
-        uses: actions/cache@v4
+          persist-credentials: false
+      - uses: ./.github/actions/setup
         with:
-          path: tools/toolchain/.compactc
-          key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
-      - run: npm ci
-      # Exactly what a contributor runs: check the formatting, compile the
-      # contract, build the library, check every cited path, typecheck, lint,
-      # and test.
-      - run: npm run verify
+          compile: 'false'
+      - run: npm run format:check
 
-  # EVERY CONTRACT, COMPILED WITH ITS PROVING AND VERIFIER KEYS. The build
-  # above compiles the converter without keys, which is all its tests need;
-  # this compiles every contract the way a deployment and the local chain
-  # tests need them, and keeps the manifests, so a build on another machine is
-  # compared with this one by comparing the files. The local chain tests are
-  # typechecked and linted against those builds here, so a change to a
-  # circuit that breaks them fails its own pull request.
-  keys:
+  # The contract, compiled by the pinned compiler, and the client library
+  # built from it.
+  compile:
+    name: compile
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: '22'
-          cache: npm
-      - name: reuse the pinned compiler if it has been fetched before
-        uses: actions/cache@v4
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: npm run build
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: tools/toolchain/.compactc
-          key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
-      - run: npm ci
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: npm run typecheck
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: npm run lint
+
+  # Every path a file in this repository cites is in it.
+  cited-paths:
+    name: cited paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          compile: 'false'
+      - run: npm run self-contained
+
+  # The runner itself rather than `npm test`, which compiles first: the setup
+  # above has already compiled.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: npx vitest run
+
+  # EVERY CONTRACT, COMPILED WITH ITS PROVING AND VERIFIER KEYS. The shared
+  # setup compiles the converter without keys, which is all its tests need; this
+  # compiles every contract the way a deployment and the local chain tests need
+  # them, and keeps the manifests, so a build on another machine is compared
+  # with this one by comparing the files. The local chain tests are typechecked
+  # and linted against those builds here, so a change to a circuit that breaks
+  # them fails its own pull request.
+  keys:
+    name: keys
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          compile: 'false'
       - run: npm run check:local-chain
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: build-manifests
           path: contracts/*/managed-keys/*.manifest.json
-
   # THE CONTRACTS ON A REAL CHAIN. Docker on the runner starts the pinned node,
   # indexer and proof server, and every transaction is proved and finalized.
-  # It takes many minutes, so it runs when asked and after a merge to main,
-  # and never as a check a pull request waits on.
+  # It takes many minutes, and it runs on every pull request: a change that
+  # breaks the contracts on a chain is refused before it reaches main, not
+  # found after.
   local-chain:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    name: local-chain
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: '22'
-          cache: npm
-      - name: reuse the pinned compiler if it has been fetched before
-        uses: actions/cache@v4
+          persist-credentials: false
+      - uses: ./.github/actions/setup
         with:
-          path: tools/toolchain/.compactc
-          key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
-      - run: npm ci
-      # Compiles every contract with keys, checks the tests against those
-      # builds, then deploys and calls them.
+          compile: 'false'
       - run: npm run test:local-chain
 
   # STATIC ANALYSIS BY SOMETHING THAT IS NOT US. The type checker is strict and
@@ -98,13 +161,16 @@ jobs:
     permissions:
       contents: read
       security-events: write
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3.39.4
         with:
           languages: javascript-typescript
           queries: security-and-quality
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3.39.4
         with:
           output: codeql-results
       - name: fail on any high or critical security result
@@ -132,21 +198,3 @@ jobs:
             echo "$found" >&2
             exit 1
           fi
-
-  # WHAT A DEPENDENCY BRINGS WITH IT, READ BEFORE IT IS MERGED RATHER THAN AFTER.
-  # The packages installed here are few and that is deliberate; the point of
-  # this job is the next one, added in some later change by somebody who did not
-  # weigh what it pulls in. A contract repository that takes an unvetted
-  # dependency has widened its trust boundary without saying so.
-  dependencies:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: low
-          comment-summary-in-pr: on-failure

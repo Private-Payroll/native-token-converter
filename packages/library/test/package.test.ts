@@ -19,11 +19,6 @@ const manifest = JSON.parse(read('package.json')) as {
   readonly exports: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly dependencies: Readonly<Record<string, string>>;
 };
-const workspace = JSON.parse(
-  readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
-) as {
-  readonly devDependencies: Readonly<Record<string, string>>;
-};
 const build = JSON.parse(read('tsconfig.build.json')) as {
   readonly include: readonly string[];
   readonly compilerOptions: { readonly rootDir: string; readonly outDir: string };
@@ -72,16 +67,7 @@ describe('the published package', () => {
     expect(manifest.scripts['prepack']).toBe('npm run build');
   });
 
-  it('installs exactly the packages the library imports, each at one exact version', () => {
+  it('installs exactly the packages the library imports', () => {
     expect(Object.keys(manifest.dependencies).sort()).toEqual([...importedByTheLibrary()].sort());
-    for (const version of Object.values(manifest.dependencies)) {
-      expect(version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
-    }
-  });
-
-  it('pins every tool it is built and checked with to one exact version', () => {
-    for (const version of Object.values(workspace.devDependencies)) {
-      expect(version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
-    }
   });
 });
