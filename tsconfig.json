@@ -16,6 +16,7 @@
     "skipLibCheck": true
   },
   "include": [
+    "vitest.config.ts",
     "scripts",
     "test",
     "contracts/*/scripts",

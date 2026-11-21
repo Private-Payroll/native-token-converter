@@ -3,8 +3,8 @@
 ## What gets checked
 
 `npm run verify` checks the formatting, compiles the contract, builds the client
-library, checks that every path this repository cites is in it, typechecks, and
-runs the tests. `npm run format` fixes the formatting. The
+library, checks that every path this repository cites is in it, typechecks,
+lints, and runs the tests. `npm run format` fixes the formatting. The
 workflow runs the same command on every pull request, along with static
 analysis and a review of any dependency the pull request adds.
 

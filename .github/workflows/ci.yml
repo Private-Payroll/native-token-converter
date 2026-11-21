@@ -28,8 +28,8 @@ jobs:
           key: compactc-${{ runner.os }}-${{ hashFiles('tools/toolchain/src/toolchain.ts') }}
       - run: npm ci
       # Exactly what a contributor runs: check the formatting, compile the
-      # contract, build the library, check every cited path, typecheck, and
-      # test.
+      # contract, build the library, check every cited path, typecheck, lint,
+      # and test.
       - run: npm run verify
 
   # STATIC ANALYSIS BY SOMETHING THAT IS NOT US. The type checker is strict and
@@ -37,9 +37,10 @@ jobs:
   # the questions the people here thought to ask. This asks a different set,
   # written by people who have seen what goes wrong in code they did not write.
   #
-  # It is advisory on this repository: the contract is Compact and the analysis
-  # reads the TypeScript around it, which is the client, the checks and the
-  # tests. That is where a mistake would be quiet rather than loud.
+  # It reads the TypeScript around the contract: the client, the checks and the
+  # tests. A result whose rule has a security severity of 7.0 or more, which is
+  # high or critical, fails the job; so does a result whose rule cannot be read,
+  # and a results file with nothing in it. Quality results are reported only.
   analyse:
     runs-on: ubuntu-latest
     permissions:
@@ -52,6 +53,33 @@ jobs:
           languages: javascript-typescript
           queries: security-and-quality
       - uses: github/codeql-action/analyze@v3
+        with:
+          output: codeql-results
+      - name: fail on any high or critical security result
+        run: |
+          for file in codeql-results/*.sarif; do
+            if [ ! -s "$file" ] || ! jq -e '(.runs | length) > 0' "$file" > /dev/null; then
+              echo "$file holds no analysis run, so nothing was checked; run the analysis again" >&2
+              exit 1
+            fi
+          done
+          found="$(jq -r '
+            [.runs[]
+             | [.tool.driver.rules[]?, .tool.extensions[]?.rules[]?] as $rules
+             | ($rules | map(.id)) as $known
+             | ($rules
+                | map(select((.properties["security-severity"] // "0" | tonumber) >= 7) | .id)) as $high
+             | .results[]
+             | (.ruleId // .rule.id) as $id
+             | select(($high | index($id) != null) or ($known | index($id) == null))
+             | "\($id) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)"]
+            | .[]' codeql-results/*.sarif)"
+          if [ -n "$found" ]; then
+            echo "static analysis found high or critical security results. Fix the code at each place below;" >&2
+            echo "a result that is wrong is cleared by excluding its query, with the reason, in a CodeQL config:" >&2
+            echo "$found" >&2
+            exit 1
+          fi
 
   # WHAT A DEPENDENCY BRINGS WITH IT, READ BEFORE IT IS MERGED RATHER THAN AFTER.
   # The packages installed here are few and that is deliberate; the point of

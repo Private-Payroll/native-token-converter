@@ -20,19 +20,24 @@
   "scripts": {
     "compact": "tsx contracts/converter/scripts/compile.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint --max-warnings 0",
     "build": "npm run build --workspace packages/library",
     "format": "prettier --write .",
     "test": "vitest run",
     "self-contained": "tsx scripts/check-self-contained.ts",
-    "verify": "prettier --check . && npm run compact && npm run build && npm run self-contained && npm run typecheck && vitest run",
+    "verify": "prettier --check . && npm run compact && npm run build && npm run self-contained && npm run typecheck && npm run lint && vitest run",
     "pretest": "npm run compact"
   },
   "devDependencies": {
+    "@eslint/compat": "2.1.1",
+    "@eslint/js": "10.0.1",
     "@openzeppelin/compact-contracts": "0.4.0-alpha.1",
     "@types/node": "22.20.1",
+    "eslint": "10.15.0",
     "prettier": "3.10.1",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
+    "typescript-eslint": "8.73.0",
     "vitest": "4.1.12"
   },
   "prettier": {

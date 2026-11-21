@@ -204,8 +204,8 @@ npm run verify
 ```
 
 `verify` checks the formatting, compiles the contract, builds the client
-library, checks that every path this repository cites is in it, typechecks, and
-runs the tests. The tests run the compiled circuits and
+library, checks that every path this repository cites is in it, typechecks,
+lints, and runs the tests. The tests run the compiled circuits and
 read the ledger effects they produce, so what they check is what the chain would
 be asked to do.
 

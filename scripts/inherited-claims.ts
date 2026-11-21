@@ -226,8 +226,8 @@ export function reproductions(
       .map((held) => held.word)
       .join(' ');
     const source = runs.get(run);
-    if (source !== undefined && !already.has(`${words[at]?.line}`)) {
-      already.add(`${words[at]?.line}`);
+    if (source !== undefined && !already.has(String(words[at]?.line))) {
+      already.add(String(words[at]?.line));
       found.push({ path, line: words[at]?.line ?? 0, words: run, source });
     }
   }

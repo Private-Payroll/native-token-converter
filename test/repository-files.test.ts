@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ignoreRules, isIgnored, repositoryFiles } from '../scripts/repository-files.js';
+import { ignoreRules, isIgnored, repositoryFiles, toPattern } from '../scripts/repository-files.js';
 
 /**
  * Paths are joined from their segments so that this file cites no path the
@@ -74,6 +74,25 @@ describe('reading an ignore file', () => {
 });
 
 describe('what a rule covers', () => {
+  // A glob is matched as the text it is written as. Every character a regular expression gives a
+  // meaning to is taken literally, the backslash included, so a name holding one covers that name
+  // and no other, whatever the rules in front of the pattern would refuse.
+  it('reads every character of a glob but the star literally', () => {
+    for (const special of ['\\', '^', '$', '.', '+', '?', '(', ')', '[', ']', '{', '}', '|', '-']) {
+      const pattern = toPattern(`a${special}b`);
+      expect(pattern.test(`a${special}b`)).toBe(true);
+      expect(pattern.test('ab')).toBe(false);
+      expect(pattern.test('aXb')).toBe(false);
+      expect(pattern.test(`a${special}${special}b`)).toBe(false);
+    }
+  });
+
+  // A star in a glob is anything within one segment, and nothing across a slash.
+  it('reads a star as anything within one segment', () => {
+    expect(toPattern('*.ts').test('index.ts')).toBe(true);
+    expect(toPattern('*.ts').test(['src', 'index.ts'].join('/'))).toBe(false);
+  });
+
   const rules = ignoreRules('node_modules/\ncontracts/managed/\n*.tsbuildinfo\n.DS_Store\n');
 
   // A rule with no slash in it names a file or folder at any depth, so a .DS_Store deep in the tree

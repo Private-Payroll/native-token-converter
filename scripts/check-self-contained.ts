@@ -55,17 +55,17 @@ for (const where of read) {
     resolvesFrom(file, cited),
   );
   for (const citation of citations) {
-    console.error(`${where}:${citation.line}  ${citation.text} is not in this repository`);
+    console.error(`${where}:${String(citation.line)}  ${citation.text} is not in this repository`);
     unfollowable += 1;
   }
 }
 
 if (unfollowable > 0) {
   console.error(
-    `\n${unfollowable} citation(s) a reader could not follow. Point at something in this repository, or say it in words.`,
+    `\n${String(unfollowable)} citation(s) a reader could not follow. Point at something in this repository, or say it in words.`,
   );
   process.exit(1);
 }
 console.log(
-  `Every path cited by the ${read.length} files this read is in the repository. The other ${files.length - read.length} were not read, for the reasons written above them.`,
+  `Every path cited by the ${String(read.length)} files this read is in the repository. The other ${String(files.length - read.length)} were not read, for the reasons written above them.`,
 );

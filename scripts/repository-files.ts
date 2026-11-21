@@ -32,9 +32,15 @@ const UNDERSTOOD_NOT = [
   { shape: /[?[\]\\]/, what: 'a wildcard character or an escape' },
 ];
 
-function toPattern(glob: string): RegExp {
-  const escaped = glob.replace(/[.+^${}()|]/g, '\\$&').replace(/\*/g, '[^/]*');
-  return new RegExp(`^${escaped}$`);
+/**
+ * The regular expression for one rule's glob. Every character a regular
+ * expression treats as special is escaped first, so the glob's own characters
+ * are matched literally; then each star, now escaped, becomes "anything within
+ * one segment".
+ */
+export function toPattern(glob: string): RegExp {
+  const literal = glob.replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&');
+  return new RegExp(`^${literal.replace(/\\\*/g, '[^/]*')}$`);
 }
 
 /**
@@ -52,7 +58,7 @@ export function ignoreRules(text: string): IgnoreRule[] {
     const refused = UNDERSTOOD_NOT.find(({ shape }) => shape.test(line));
     if (refused) {
       throw new Error(
-        `.gitignore line ${index + 1}, "${line}", is ${refused.what}; write it as a name, a path or a single star`,
+        `.gitignore line ${String(index + 1)}, "${line}", is ${refused.what}; write it as a name, a path or a single star`,
       );
     }
     const directoryOnly = line.endsWith('/');

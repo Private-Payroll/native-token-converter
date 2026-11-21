@@ -42,7 +42,7 @@ const importedByTheLibrary = (): Set<string> => {
       /(?:from|import|require)\s*\(?\s*['"]([^'".][^'"]*)['"]/g,
     )) {
       const parts = (specifier ?? '').split('/');
-      names.add(parts[0]?.startsWith('@') ? `${parts[0]}/${parts[1]}` : (parts[0] ?? ''));
+      names.add(parts[0]?.startsWith('@') ? `${parts[0]}/${String(parts[1])}` : (parts[0] ?? ''));
     }
   }
   return names;

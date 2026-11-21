@@ -23,7 +23,7 @@ export function normaliseAddress(converterAddress: string): string {
   const lower = bare.toLowerCase();
   if (!HEX_32.test(lower)) {
     throw new Error(
-      `a converter address is ${ADDRESS_HEX_LENGTH} hex characters; got ${JSON.stringify(converterAddress)}`,
+      `a converter address is ${String(ADDRESS_HEX_LENGTH)} hex characters; got ${JSON.stringify(converterAddress)}`,
     );
   }
   return lower;
@@ -31,7 +31,7 @@ export function normaliseAddress(converterAddress: string): string {
 
 function requireColour(bytes: Uint8Array, what: string): Uint8Array {
   if (bytes.length !== COLOUR_BYTES) {
-    throw new Error(`a ${what} is ${COLOUR_BYTES} bytes; got ${bytes.length}`);
+    throw new Error(`a ${what} is ${String(COLOUR_BYTES)} bytes; got ${String(bytes.length)}`);
   }
   return bytes;
 }

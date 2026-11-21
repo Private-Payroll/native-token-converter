@@ -120,7 +120,7 @@ describe('the converter', () => {
   ) => contract.impureCircuits.wrap(context('wrap'), colour, amount, to, freshNonce());
 
   const redeem = async (coin: Coin, colour: Uint8Array = backing, to = sampleUserAddress()) =>
-    contract.impureCircuits.redeem(context('redeem'), colour, coin as never, {
+    contract.impureCircuits.redeem(context('redeem'), colour, coin, {
       bytes: encodeUserAddress(to),
     });
 
