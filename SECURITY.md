@@ -1,8 +1,9 @@
 # Reporting something that could lose money
 
-This contract is immutable once deployed. There is no administrator, no pause,
-and no upgrade path, so a defect found after a deployment cannot be fixed in
-that deployment. It can only be replaced, and every holder has to move.
+This contract is to be deployed with no maintenance authority, which makes it
+immutable: there is no administrator, no pause, and no upgrade path, so a defect
+found after a deployment cannot be fixed in that deployment. It can only be
+replaced, and every holder has to move.
 
 That is why this page exists rather than a line in a contributing guide: the
 route has to be findable by somebody who has just found a way to destroy other
@@ -29,9 +30,10 @@ which the defect is known and nothing can be done about it.
 published for other people to use, not a funded programme, and saying so here
 is better than letting you find out after the work.
 
-**A fix may be a different contract.** The deployed code cannot change. So a
-report that lands may result in a replacement being published and the old
-deployment being named as one nobody should wrap into, rather than in a patch.
+**A fix may be a different contract.** Deployed with no maintenance authority,
+the code cannot change. So a report that lands may result in a replacement
+being published and the old deployment being named as one nobody should wrap
+into, rather than in a patch.
 That is slower and more disruptive than a fix, and it is the reason a report
 is worth making early.
 

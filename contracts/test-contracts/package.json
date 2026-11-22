@@ -1,7 +1,7 @@
 {
   "name": "@native-token-converter/test-contracts",
   "version": "0.1.0",
-  "description": "Contracts that exist only to test the converter on a local chain: one that calls it, one with a wider recipient, and a minter of public tokens.",
+  "description": "Contracts that exist only to test the converter on a local chain: one that holds coins and calls it, and a minter of public tokens.",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,

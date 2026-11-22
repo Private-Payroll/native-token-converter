@@ -129,13 +129,43 @@ jobs:
         with:
           name: build-manifests
           path: contracts/*/managed-keys/*.manifest.json
+  # Whether a pull request changes anything the chain tests run: the
+  # contracts, the tools that compile, deploy and drive them, the client
+  # library, or what installs, configures and runs them. Read from the merge
+  # commit the pull request is checked on, against its first parent, which is
+  # the base branch it would be merged into. Only a pull request runs it.
+  chain-paths:
+    name: chain paths
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.paths.outputs.changed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: paths
+        run: |
+          files="$(git diff --name-only --no-renames HEAD^1 HEAD)"
+          if grep -qE '^(contracts/|tools/|packages/|package\.json$|package-lock\.json$|\.nvmrc$|\.github/actions/setup/|\.github/workflows/ci\.yml$|tsconfig\.json$|tsconfig\.local-chain\.json$|eslint\.config\.js$|vitest\.local-chain\.config\.ts$)' <<< "$files"; then
+            echo changed=true >> "$GITHUB_OUTPUT"
+          else
+            echo changed=false >> "$GITHUB_OUTPUT"
+          fi
+
   # THE CONTRACTS ON A REAL CHAIN. Docker on the runner starts the pinned node,
   # indexer and proof server, and every transaction is proved and finalized.
-  # It takes many minutes, and it runs on every pull request: a change that
-  # breaks the contracts on a chain is refused before it reaches main, not
-  # found after.
+  # It takes many minutes. It runs on every push to main and every run started
+  # by hand, and on a pull request unless that pull request is known to change
+  # nothing the chain tests run; then it reports itself skipped, which the
+  # branch rules count as passed, so a pull request is never left waiting for
+  # it. If the paths cannot be read, it runs.
   local-chain:
     name: local-chain
+    needs: chain-paths
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.chain-paths.outputs.changed != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

@@ -11,8 +11,9 @@ pragma language_version 0.28.0;
 
 import CompactStandardLibrary;
 
-// The converter's circuits with a recipient that may be a contract.
-contract WiderConverter {
+// The converter's two circuits: a mint to a coin key or a contract, a payout
+// to a contract or a user address.
+contract Converter {
   circuit wrap(
     backing: Bytes<32>,
     amount: Uint<64>,
@@ -24,18 +25,6 @@ contract WiderConverter {
     coin: ShieldedCoinInfo,
     to: Either<ContractAddress, UserAddress>
   ): [];
-}
-
-// The converter's circuits as they are: a mint to a coin key, a payout to a
-// user address.
-contract Converter {
-  circuit wrap(
-    backing: Bytes<32>,
-    amount: Uint<64>,
-    to: ZswapCoinPublicKey,
-    nonce: Bytes<32>
-  ): ShieldedCoinInfo;
-  circuit redeem(backing: Bytes<32>, coin: ShieldedCoinInfo, to: UserAddress): [];
 }
 
 // The coins this contract has been given, by nonce, which of them it holds,
@@ -71,7 +60,7 @@ circuit release(converterAt: ContractAddress): ShieldedCoinInfo {
 
 // Has the converter mint `amount` to this contract, claims the coin and keeps it.
 export circuit wrapToSelf(
-  converter: WiderConverter,
+  converter: Converter,
   backing: Bytes<32>,
   amount: Uint<64>,
   nonce: Bytes<32>
@@ -84,7 +73,7 @@ export circuit wrapToSelf(
 
 // Has the converter mint to this contract and does not claim the coin.
 export circuit wrapToSelfUnclaimed(
-  converter: WiderConverter,
+  converter: Converter,
   backing: Bytes<32>,
   amount: Uint<64>,
   nonce: Bytes<32>
@@ -95,7 +84,7 @@ export circuit wrapToSelfUnclaimed(
 // Sends the held coin to the converter at `converterAt` and redeems it there,
 // paid to the user address `to`.
 export circuit redeemHeld(
-  converter: WiderConverter,
+  converter: Converter,
   converterAt: ContractAddress,
   backing: Bytes<32>,
   to: UserAddress
@@ -106,7 +95,7 @@ export circuit redeemHeld(
 
 // Redeems the held coin with this contract as the payee and receives the payout.
 export circuit redeemHeldToSelf(
-  converter: WiderConverter,
+  converter: Converter,
   converterAt: ContractAddress,
   backing: Bytes<32>
 ): [] {
@@ -117,7 +106,7 @@ export circuit redeemHeldToSelf(
 
 // Redeems the held coin with this contract as the payee and does not receive the payout.
 export circuit redeemHeldToSelfUnreceived(
-  converter: WiderConverter,
+  converter: Converter,
   converterAt: ContractAddress,
   backing: Bytes<32>
 ): [] {
@@ -129,26 +118,4 @@ export circuit redeemHeldToSelfUnreceived(
 export circuit deposit(coin: ShieldedCoinInfo): [] {
   receiveShielded(disclose(coin));
   keep(disclose(coin));
-}
-
-// Has the converter as it is mint to the coin key `to`.
-export circuit wrapThrough(
-  converter: Converter,
-  backing: Bytes<32>,
-  amount: Uint<64>,
-  to: ZswapCoinPublicKey,
-  nonce: Bytes<32>
-): ShieldedCoinInfo {
-  return disclose(converter).wrap(disclose(backing), disclose(amount), disclose(to), disclose(nonce));
-}
-
-// Sends the held coin to the converter as it is and redeems it there.
-export circuit redeemHeldThrough(
-  converter: Converter,
-  converterAt: ContractAddress,
-  backing: Bytes<32>,
-  to: UserAddress
-): [] {
-  const coin = release(disclose(converterAt));
-  disclose(converter).redeem(disclose(backing), coin, disclose(to));
 }
