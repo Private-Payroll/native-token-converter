@@ -17,5 +17,6 @@ or `Security`, and anything that changes what a wrap or a redemption does, or wh
 under `Security` as well, so somebody deciding whether to upgrade does not have to infer it. An entry
 names its pull request, never a person.
 
-A new contract is a new deployment, not an upgrade: the deployed one cannot change. An entry for a
-change to the contract says so, and says what happens to notes wrapped by the one before.
+A new contract is a new deployment, not an upgrade: deployed with no maintenance authority, as it is
+meant to be, the deployed one cannot change. An entry for a change to the contract says so, and says
+what happens to notes wrapped by the one before.

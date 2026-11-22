@@ -11,7 +11,8 @@ A pull request runs each of those as a check of its own, so the page shows which
 one failed, and three more: `keys` compiles every contract with its proving and
 verifier keys and checks the local chain tests against those builds, `local-chain`
 deploys and calls the contracts on a chain started on the runner, and `analyse`
-is static analysis. A pull request that changes a dependency is also reviewed for
+is static analysis. `local-chain` is skipped on a pull request that changes
+nothing the chain tests run, which `chain paths` reads from the changed files. A pull request that changes a dependency is also reviewed for
 what that dependency brings with it.
 
 `npm run test:local-chain` runs the local chain tests on your own machine, with
@@ -65,5 +66,6 @@ one by the steps above.
 ## Reporting something that could lose money
 
 Report it privately rather than in an issue, and read SECURITY.md first: this
-contract is immutable, so a defect found after a deployment cannot be fixed in
-that deployment.
+contract is to be deployed with no maintenance authority, which makes it
+immutable, so a defect found after a deployment cannot be fixed in that
+deployment.

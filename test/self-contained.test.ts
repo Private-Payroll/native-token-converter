@@ -55,14 +55,6 @@ describe('what counts as pointing somewhere', () => {
     expect(pathsCitedIn('https://example.test/some/where/thing.zip')).toEqual([]);
     expect(pathsCitedIn('https://example.test/page?from=src/nowhere.ts')).toEqual([]);
   });
-
-  // Files inside an installed package belong to that package, so paths into one are not this
-  // repository's to answer for.
-  it('ignores what is inside a vendored directory, which is not ours to answer for', () => {
-    expect(pathsCitedIn('../../node_modules/a-package/token/Thing.compact')).toEqual([]);
-    expect(pathsCitedIn('a/nested/node_modules/thing/index.js')).toEqual([]);
-    expect(pathsCitedIn('node_modules/a-package/index.js')).toEqual([]);
-  });
 });
 
 describe('what a reader cannot follow', () => {

@@ -8,8 +8,9 @@
  * for one compiled contract and a wallet, and wraps the proof and submission
  * providers to time them. Sizes, modelled costs and fees are read off the
  * finalized transaction with the ledger's own API, under the parameters of the
- * block it landed in. A contract with private state or witnesses is outside
- * what this offers and is refused by the types rather than at run time.
+ * block it landed in. A contract with private state or witnesses, or whose
+ * constructor takes arguments, is outside what this offers and is refused by
+ * the types rather than at run time.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -290,14 +291,24 @@ export interface Deployed<C extends StatelessContract> {
   readonly measurement: Measurement;
 }
 
-/** Deploys `compiled` with the constructor arguments `args`, and waits until it is final. */
+/**
+ * `Compiled<C>` when the constructor of `C` takes no arguments, and `never`
+ * otherwise, so that passing such a contract to `deploy` does not typecheck.
+ */
+export type ArgumentlessCompiled<C extends StatelessContract> =
+  Contract.InitializeParameters<C> extends [] ? Compiled<C> : never;
+
+/** Deploys `compiled`, whose constructor takes no arguments, and waits until it is final. */
 export async function deploy<C extends StatelessContract>(
   through: ContractProviders,
-  compiled: Compiled<C>,
-  args: Contract.InitializeParameters<C>,
+  compiled: Compiled<C> & ArgumentlessCompiled<C>,
 ): Promise<Deployed<C>> {
   resetClock(through.clock);
-  const options: Ledger9DeployContractOptionsBase<C> = { compiledContract: compiled, args };
+  // Midnight.js asks for constructor arguments only of a contract whose
+  // constructor takes some, which it cannot tell of a contract type left open
+  // here; the parameter's type has already refused any such contract.
+  const plain: Compiled<C> = compiled;
+  const options = { compiledContract: plain } as Ledger9DeployContractOptionsBase<C>;
   const contract = await deployContract(through.providers, options);
   const finalizedAt = performance.now();
   const address = contract.deployTxData.public.contractAddress;
@@ -375,8 +386,13 @@ export function largestShare(share: NormalizedCost): string {
   return `${part} ${(value * 100).toFixed(2)}%`;
 }
 
+/** Every measurement in `measurements`, one line each, under the machine they were measured on. */
+export function measurementSummary(measurements: readonly Measurement[]): string {
+  return `\nmeasured on ${process.platform} ${process.arch}\n${measurements.map(measurementLine).join('\n')}\n`;
+}
+
 /** One measurement as one line of a table, for a person reading test output. */
-export function measurementLine(measurement: Measurement): string {
+function measurementLine(measurement: Measurement): string {
   const cell = (value: string, width: number): string => value.padStart(width);
   return [
     cell(measurement.label, 8),

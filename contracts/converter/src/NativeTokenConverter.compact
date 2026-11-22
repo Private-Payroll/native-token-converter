@@ -2,140 +2,116 @@
 
 pragma language_version 0.28.0;
 
-import CompactStandardLibrary;
-import "../../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily"
-  prefix Token_;
-
-// The family metadata is re-exported so it is readable by name from public
-// state. Nothing here can change it after construction.
-import { _name, _symbol, _decimals, _isInitialized }
-  from "../../../node_modules/@openzeppelin/compact-contracts/token/NativeShieldedTokenFamily";
-export { _name, _symbol, _decimals, _isInitialized };
-
-// `decimals` is fixed at 0 and it is not a display convention this contract can
-// honour. One value is stored for every asset this contract will ever accept,
-// and the assets do not share one. 0 says the only thing that is true of all of
-// them: this contract applies no scaling, so a wrapped note's integer value is
-// the backing asset's integer value, unit for unit. A holder wanting a decimal
-// point must take it from the backing asset, never from here.
+// Wraps an unshielded token into a shielded note that stands for it, and
+// redeems the note back into the token. Two circuits, no circuit for an
+// administrator, no pause and no stored totals: a pool is this contract's
+// public balance of one backing token, kept by the ledger. A redeemed note is
+// kept by this contract, which has no circuit that can spend it. Nothing in
+// this source stops a circuit being added after deployment; only deploying it
+// with no maintenance authority does.
 //
-// `initialize` is reachable only from this constructor: it is not among the
-// circuits below, so the metadata is written exactly once, when the contract
-// comes into existence.
-constructor(name_: Opaque<"string">, symbol_: Opaque<"string">) {
-  Token_initialize(name_, symbol_, 0 as Uint<8>);
+// A recipient may be a wallet or a contract. The ledger refuses a mint or a
+// payment addressed to a contract that does not take it in the same
+// transaction, so neither can be stranded there; the one recipient it would
+// let through and strand is this contract itself, which no circuit here can
+// spend from. Both circuits refuse it.
+
+import CompactStandardLibrary;
+
+// Whether a mint recipient is the all-zero key or the all-zero address,
+// reading only the branch taken: its bytes are selected, then compared with
+// zero. A coin sent to either can never be spent.
+circuit isZeroCoinRecipient(to: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+  return (to.is_left ? to.left.bytes : to.right.bytes) == default<Bytes<32>>;
 }
 
-// Take `amount` of the unshielded token `backing` into this contract, and mint
-// the caller `amount` of the shielded token that stands for it.
+// Whether a mint recipient is this contract. Only the branch taken is read:
+// comparing the whole value would let a caller name this contract with
+// anything at all in the other branch and be told it is somebody else.
+// `self` is this contract's address, read once by the calling circuit.
+circuit isThisContract(to: Either<ZswapCoinPublicKey, ContractAddress>, self: ContractAddress): Boolean {
+  return !to.is_left && to.right == self;
+}
+
+// Whether a payout recipient is the all-zero contract or user address, read
+// the same way. A payment to either can never be spent from again.
+circuit isZeroPayee(to: Either<ContractAddress, UserAddress>): Boolean {
+  return (to.is_left ? to.left.bytes : to.right.bytes) == default<Bytes<32>>;
+}
+
+// Whether a payout recipient is this contract, read the same way. `self` is
+// this contract's address, read once by the calling circuit.
+circuit paysThisContract(to: Either<ContractAddress, UserAddress>, self: ContractAddress): Boolean {
+  return to.is_left && to.left == self;
+}
+
+// Takes `amount` of the unshielded token `backing` into this contract and
+// mints `amount` of the shielded note that stands for it to `to`, returning
+// the minted coin.
 //
-// The pool is not chosen. `backing` is the domain separator, so the shielded
-// colour minted is `tokenType(backing, thisContract)` - a function of the coin
-// being wrapped and of this address, and of nothing else. The first person to
-// wrap a colour brings its pool into existence; everybody after uses that one
-// because arithmetic offers no second one.
+// The note's colour is `tokenType(backing, this contract)`: a function of the
+// token being wrapped and of this address and nothing else, so there is one
+// pool per backing token and nobody chooses it. What is taken in and what is
+// minted are one `backing` and one `amount`, so they cannot disagree.
+// `amount` is a Uint<64>, the protocol's mint ceiling, so a wrap above it
+// cannot be expressed.
 //
-// Two identities hold here by construction rather than by an assertion that
-// could be written wrongly:
-//   - the colour received and the colour minted against are one argument;
-//   - the amount received and the amount minted are one argument.
+// Refused: an amount of zero, a recipient that is the zero key or the zero
+// address, and this contract as recipient, where the coin would sit with no
+// circuit able to spend it.
 //
-// `amount` is a Uint<64> because that is the protocol's mint ceiling. The
-// widening to Uint<128> on the way in is explicit, so an over-ceiling wrap
-// cannot be expressed in the call at all, and there is no path on which this
-// contract takes in backing it could not mint a claim against.
-//
-// Whether the recipient ever sees this note is not this circuit's to decide,
-// and it is the quiet way a wrap goes wrong. The mint puts the coin and the
-// key it was minted to into the transaction's outputs, and that is the whole
-// of what happens here. The encrypted copy a wallet scans for is attached
-// afterwards, by whatever builds the transaction, from an encryption key that
-// is not the key below and that no circuit can reach: there is none in the
-// compiled contract or in the runtime it calls.
-//
-// So a note whose encrypted copy was left off, or was made against a key that
-// is not the recipient's, is an ordinary note here. It is backed, the pool
-// balances, and its owner is never told it exists. This contract cannot see
-// the difference and does not pretend to.
-//
-// The token module this contract imports says something stronger and
-// narrower: that the value returned here is the recipient's only route to the
-// note, and that losing it loses the money. That is written for a mint to a
-// contract address, where there is no wallet to tell and no encrypted copy is
-// made. `to` is a coin public key and is passed as the left branch, so this
-// circuit cannot make that kind of mint at all.
-//
-// That sentence has been copied out of the module and into this repository
-// twice. Nothing here can edit somebody else's module, so the only place to
-// answer it is where a reader of the module is standing, and
-// test/inherited-claims.test.ts is what stops a third copy.
+// Whether a wallet recipient ever sees its note is not decided here. The
+// encrypted copy a wallet scans for is attached by whatever builds the
+// transaction, from a key no circuit can reach. A contract recipient takes the
+// returned coin in the same transaction or the ledger refuses the mint.
 export circuit wrap(
   backing: Bytes<32>,
   amount: Uint<64>,
-  to: ZswapCoinPublicKey,
+  to: Either<ZswapCoinPublicKey, ContractAddress>,
   nonce: Bytes<32>
 ): ShieldedCoinInfo {
+  const recipient = disclose(to);
+  const self = kernel.self();
+  assert(disclose(amount) != 0, "the amount to wrap is zero");
+  assert(!isZeroCoinRecipient(recipient), "the recipient is the zero key or the zero address");
+  assert(!isThisContract(recipient, self), "the recipient is this contract, which could never spend the coin");
   receiveUnshielded(disclose(backing), disclose(amount) as Uint<128>);
-  return Token__mint(
-    backing,
-    left<ZswapCoinPublicKey, ContractAddress>(disclose(to)),
-    amount,
-    nonce
-  );
+  return mintShieldedToken(disclose(backing), disclose(amount), disclose(nonce), recipient);
 }
 
-// Destroy `coin` and pay out the same number of units of the unshielded token
-// that backs it.
+// Takes `coin` in and keeps it, and pays the same number of units of
+// `backing` to `to`, a contract or a user address.
 //
-// The same two identities hold, and again by construction:
-//   - `backing` is both the domain the coin is burned against and the colour
-//     paid out, so burning one colour and paying another is not expressible.
-//     The burn refuses unless `coin.color` is this contract's token type for
-//     `backing`, which is what makes the pool the coin came from the pool it
-//     returns to.
-//   - `coin.value` is both the amount burned and the amount paid, so a
-//     redemption that destroys less than it pays out is not expressible. There
-//     is no separate amount to disagree with it.
+// `backing` is both the pool the coin must belong to and the token paid out,
+// and `coin.value` is both what is taken in and what is paid, so taking a coin
+// of one pool and paying from another, or paying more than is taken in,
+// cannot be expressed. A coin of another token, of another pool, or of another
+// converter is refused by its colour.
 //
-// A coin is redeemed whole. A holder wanting part of one splits it first and
-// redeems the part. That costs a second transaction, and a holder of nothing
-// but wrapped notes has no way to pay for either: fees are not this contract's
-// to solve and it does not pretend to.
+// The coin is taken in whole and stays with this contract. No circuit here
+// spends a shielded coin, so a redeemed note never moves again and the backing
+// paid against it is paid only once, for as long as no circuit is added. That
+// is why this contract must be deployed with no maintenance authority (an
+// empty committee, threshold at least 1): a contract that could take a new
+// circuit could spend every note it holds.
 //
-// The payout address is checked. An unshielded transfer to the all-zero address
-// is accepted by the chain and can never be spent from again, so without this a
-// redemption to it would burn a note, balance perfectly, leave the pool solvent,
-// and destroy that holder's money in silence. A refused assert takes the whole
-// transaction with it, so nothing is burned on the way to the refusal; the check
-// is written first because that is where a reader looks for it.
-//
-// The burn's refund target is never reached. The change branch fires only when
-// less than the whole coin is destroyed, and `coin.value` is what is destroyed,
-// so the change is structurally zero; the assert below refuses rather than
-// leaving that to reasoning. The key handed over is a constant, and inert: it
-// has to be non-zero to satisfy the burn, and it is nobody's key - thirty-two
-// bytes of text, with no secret behind them - so were the change branch ever
-// to fire, whatever it produced could not be spent by anyone. The assert
-// refuses first, which is what makes that hypothetical.
+// Refused: a payout to the zero address of either kind, which nobody can ever
+// spend from; a payout to this contract, which would return the backing to
+// the pool and leave the holder with nothing; a coin of the wrong colour; and
+// a coin worth nothing. The coin is redeemed whole, at its value.
 export circuit redeem(
   backing: Bytes<32>,
   coin: ShieldedCoinInfo,
-  to: UserAddress
+  to: Either<ContractAddress, UserAddress>
 ): [] {
-  assert(disclose(to) != default<UserAddress>,
-    "the payout address is the zero address, which nobody can ever spend from");
-  const change = Token__burn(
-    backing,
-    coin,
-    disclose(coin).value,
-    left<ZswapCoinPublicKey, ContractAddress>(
-      ZswapCoinPublicKey { bytes: pad(32, "no change is possible here") }
-    )
-  );
-  assert(!change.is_some, "the whole note was not destroyed");
-  sendUnshielded(
-    disclose(backing),
-    disclose(coin).value,
-    right<ContractAddress, UserAddress>(disclose(to))
-  );
+  const payee = disclose(to);
+  const redeemed = disclose(coin);
+  const self = kernel.self();
+  assert(!isZeroPayee(payee), "the payout address is the zero address, which nobody can ever spend from");
+  assert(!paysThisContract(payee, self), "the payout address is this contract, which would keep the payout in the pool");
+  assert(redeemed.color == tokenType(disclose(backing), self),
+    "the coin is not of this contract's colour for that backing token");
+  assert(redeemed.value != 0, "the coin is worth nothing");
+  receiveShielded(redeemed);
+  sendUnshielded(disclose(backing), redeemed.value, payee);
 }

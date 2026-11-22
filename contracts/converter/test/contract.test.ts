@@ -13,6 +13,7 @@ interface Argument {
     readonly 'type-name': string;
     readonly length?: number;
     readonly maxval?: string;
+    readonly name?: string;
   };
 }
 interface CircuitInfo {
@@ -47,6 +48,13 @@ const manifest = JSON.parse(
   ),
 ) as { readonly dependencies: Readonly<Record<string, string>> };
 
+// The language version the source asks for, read from its pragma. The pragma
+// names one exact version, with no range, so the compiled contract can only
+// have been checked against the language this source was written in.
+const pragma = /^pragma language_version ([^;]+);$/m.exec(
+  readFileSync(join(import.meta.dirname, '..', 'src', 'NativeTokenConverter.compact'), 'utf8'),
+)?.[1];
+
 const circuit = (name: string): CircuitInfo => {
   const found = info.circuits.find((each) => each.name === name);
   if (found === undefined) {
@@ -56,16 +64,36 @@ const circuit = (name: string): CircuitInfo => {
 };
 
 const shapeOf = (each: CircuitInfo): Array<[string, string]> =>
-  each.arguments.map((argument) => [argument.name, argument.type['type-name']]);
+  each.arguments.map((argument) => [
+    argument.name,
+    argument.type.name ?? argument.type['type-name'],
+  ]);
 
 describe('what the deployed contract offers', () => {
   it('is two circuits and no others', () => {
     expect(info.circuits.map((each) => each.name).sort()).toEqual(['redeem', 'wrap']);
   });
 
+  // A circuit can spend a coin this contract holds only through the runtime's
+  // input builder and the nullifier it claims, whichever path the spend is on.
+  // Neither appears anywhere in the compiled circuits, so no path of any of them
+  // spends a note this contract keeps, however rarely that path is taken.
+  it('has no circuit that spends a shielded coin, on any path', () => {
+    const compiled = readFileSync(
+      join(import.meta.dirname, '..', 'managed', 'contract', 'index.js'),
+      'utf8',
+    );
+    expect(compiled).not.toMatch(/createZswapInput/);
+    expect(compiled).not.toMatch(/Nullifier/);
+  });
+
   it('was built by the pinned compiler', () => {
     expect(info['compiler-version']).toBe(COMPACTC_VERSION);
-    expect(info['language-version']).toBe('0.28.0');
+  });
+
+  it('asks for one exact language version, and was compiled against that one', () => {
+    expect(pragma).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(info['language-version']).toBe(pragma);
   });
 
   it('expects the runtime this package depends on, and no other', () => {
@@ -74,11 +102,11 @@ describe('what the deployed contract offers', () => {
 });
 
 describe('wrap', () => {
-  it('takes one backing colour, one amount, a recipient and a nonce', () => {
+  it('takes one backing colour, one amount, a key or a contract to mint to, and a nonce', () => {
     expect(shapeOf(circuit('wrap'))).toEqual([
       ['backing', 'Bytes'],
       ['amount', 'Uint'],
-      ['to', 'Struct'],
+      ['to', 'Either'],
       ['nonce', 'Bytes'],
     ]);
   });
@@ -94,50 +122,26 @@ describe('wrap', () => {
 });
 
 describe('redeem', () => {
-  it('takes one backing colour, the coin, and where to pay', () => {
+  it('takes one backing colour, the coin, and a contract or a user address to pay', () => {
     expect(shapeOf(circuit('redeem'))).toEqual([
       ['backing', 'Bytes'],
-      ['coin', 'Struct'],
-      ['to', 'Struct'],
+      ['coin', 'ShieldedCoinInfo'],
+      ['to', 'Either'],
     ]);
-  });
-
-  it('takes those three arguments and no fourth', () => {
-    // What is burned and what is paid out being one and the same value is
-    // checked by running the circuit, in ./converter.test.ts. This only
-    // holds the door shut on an amount argument appearing for it to disagree
-    // with.
-    expect(circuit('redeem').arguments).toHaveLength(3);
   });
 });
 
-describe('what construction settles for good', () => {
-  const construct = async (name: string, symbol: string) => {
-    const built = await new Contract({}).initialState(
-      {
-        initialZswapLocalState: { coinPublicKey: sampleContractAddress() },
-        initialPrivateState: {},
-      } as never,
-      name,
-      symbol,
-    );
-    return ledger(built.currentContractState.data);
-  };
-
-  it('writes the metadata once and marks it written', async () => {
-    const state = await construct('Wrapped', 'w');
-    expect(state._isInitialized).toBe(true);
-    expect(state._name).toBe('Wrapped');
-    expect(state._symbol).toBe('w');
-  });
-
-  it('fixes decimals at 0, because this contract applies no scaling to anything it wraps', async () => {
-    const state = await construct('Wrapped', 'w');
-    expect(state._decimals).toBe(0n);
-  });
-
-  it('leaves nothing else in public state', async () => {
-    const state = await construct('Wrapped', 'w');
-    expect(Object.keys(state).sort()).toEqual(['_decimals', '_isInitialized', '_name', '_symbol']);
+describe('construction', () => {
+  it('leaves nothing in public state', async () => {
+    const built = await new Contract({}).initialState({
+      initialZswapLocalState: { coinPublicKey: sampleContractAddress() },
+      initialPrivateState: {},
+    } as never);
+    expect(Object.keys(ledger(built.currentContractState.data))).toEqual([]);
+    // A field the contract does not export is still public on the chain, and
+    // is not among the names above; the state itself must hold no field at all.
+    const held = built.currentContractState.data.state;
+    expect(held.type()).toBe('array');
+    expect(held.asArray()).toHaveLength(0);
   });
 });

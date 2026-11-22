@@ -15,20 +15,21 @@ below rather than left to be discovered.
 
 ## Status
 
-**Not deployed, not audited, and not yet proved on a chain.** The circuits are
-compiled by the pinned compiler and exercised in a simulator that reads the
-ledger effects, so what the tests check is what the chain would be asked to do:
-which colour came in, which went out, how much of each, and where it went. That
-is not the same as a node accepting the transaction, and nobody should treat it
-as such until it has.
+**Not deployed and not audited.** The circuits are compiled by the pinned
+compiler and exercised two ways: in a simulator that reads the ledger effects,
+which checks what the chain would be asked to do (which colour came in, which
+went out, how much of each, and where it went), and on a local chain, the pinned
+node, indexer and proof server in Docker, where each transaction is proved and
+finalized. A local chain is not a public network, and nothing here has run on
+one.
 
 What has been done to it, so the claim above can be read in proportion: the
-code was broken on purpose 41 times, in the contract and its client, and the
-suite failed on 40 of them, and the one that stays green is documented in
-place with the reason rather than removed. Two independent review passes were
-run over the work by readers other than its author; both found defects, one of
-them a redemption to the zero address that would have destroyed a holder's
-money silently while leaving every pool solvent.
+code was broken on purpose, in the contract and its client, and the suite
+failed on each break but two, which only make a check refuse more than it must
+and move no money. Two independent review passes were run over the work by
+readers other than its author; both found defects, one of them a redemption to
+the zero address that would have destroyed a holder's money silently while
+leaving every pool solvent.
 
 Report anything that could lose money privately. See [SECURITY.md](SECURITY.md).
 
@@ -41,30 +42,31 @@ wrap(backing, amount, to, nonce) -> ShieldedCoinInfo
 Takes `amount` of the unshielded token `backing` into the contract and mints
 `amount` of the shielded note that stands for it, to `to`.
 
-`to` is checked for one thing and one thing only: that it is not the zero key.
-The backing is taken in before the note is minted, so a mistyped or stale `to`
-puts the backing into a pool it can never leave and mints a note against it that
-nobody holds the key to.
+`to` is a key or a contract, and is refused only if it is the zero key, the zero
+address or this contract. The backing is taken in before the note is minted, so
+a mistyped or stale `to` puts the backing into a pool it can never leave and
+mints a note against it that nobody holds the key to.
 
 Whether a note that was minted correctly can be found by its owner is a separate
 question, decided by the client that builds the transaction rather than here.
 That is the other thing a caller can get wrong with nothing refusing it, and it
 has its own section below.
 
-`nonce` is yours to choose and yours to get right. It must not repeat for a given
-pool, or the ledger rejects the transaction; and it should be secret and random,
-because a predictable one makes the mint's recipient guessable. Neither is
-checked here.
+`nonce` is yours to choose and yours to get right. It should be fresh, secret
+and random: the ledger refuses a coin that repeats one already made to the same
+recipient, and a predictable nonce makes the mint's recipient guessable. Neither
+is checked here.
 
 ```
 redeem(backing, coin, to) -> ()
 ```
 
-Destroys `coin` and pays out the same number of units of `backing` to `to`.
+Takes `coin` in and keeps it, and pays out the same number of units of
+`backing` to `to`, a contract or a user address. The contract has no circuit
+that spends a note it holds, so a redeemed note never moves again for as long
+as no circuit can be added to it.
 
-A note is redeemed whole. There is no partial redemption: a holder wanting part
-of a note splits it first and redeems the part, which costs a second
-transaction.
+`coin` is redeemed whole, at its value.
 
 ## What this contract cannot decide for you
 
@@ -107,19 +109,10 @@ reach the client that builds the transaction, and how it gets there is a questio
 for whatever you are building. Check it before the wrap. This contract cannot,
 and does not pretend to.
 
-The value `wrap` returns is a convenience for the caller. Where the encrypted
-copy was attached correctly it is not the recipient's only route to the note, and
-dropping it costs them nothing.
-
-### One `decimals` ships for every asset, and the contract cannot decline to choose
-
-The token metadata is contract-wide and fixed when the contract is constructed,
-while the assets it will accept are not known and do not share a convention. The
-value here is `0`, which says the only thing true of all of them: this contract
-applies no scaling, so a note's integer value is the backing asset's integer
-value, unit for unit. It is not a display convention, and a client that reads it
-as one will put the decimal point in the wrong place. Take the decimals from the
-backing asset.
+The value `wrap` returns is a convenience for a wallet recipient: where the
+encrypted copy was attached correctly it is not their only route to the note. A
+contract recipient has to take the returned coin in the same transaction, or the
+ledger refuses the mint.
 
 ## One pool per coin, and nobody chooses it
 
@@ -138,11 +131,12 @@ tokenType(backingColour, converterAddress)
 
 The same fact does the safety work. `backing` is supplied once per call and
 drives both halves: on the way in it is the colour received and the domain minted
-against; on the way out it is the domain the note is burned against and the
-colour paid out. Burning one pool and paying from another is not a mistake this
-contract can make, because it cannot be expressed. The same is true of the
+against; on the way out it is the pool the note must belong to and the colour
+paid out. Taking a note of one pool and paying from another is not a mistake
+this contract can make, because it cannot be expressed. The same is true of the
 amounts: `wrap` uses one `amount` for what it takes in and what it mints, and
-`redeem` has no amount argument at all - it burns and pays the note's own value.
+`redeem` has no amount argument at all - it takes in the note and pays its own
+value.
 
 ## Two more things worth knowing before you build on it
 
@@ -159,15 +153,16 @@ answer for itself; this contract does not answer it and does not pretend to.
 
 ## What it will never have
 
-No administrator, no key held by anyone, no pause, and no upgrade path. Nothing
-about a deployment can be changed after it exists, including by whoever deployed
-it. The contract never holds anybody's money on their behalf: it holds backing
-against notes, and any holder of a note can take that backing out without
-anyone's permission.
+No administrator circuit and no pause. Deployed with no maintenance authority,
+as it is meant to be, it has no key held by anyone and no upgrade path: nothing
+about such a deployment can be changed after it exists, including by whoever
+deployed it. The contract never holds anybody's money on their behalf: it holds
+backing against notes, and any holder of a note can take that backing out
+without anyone's permission.
 
-And no way to recover anything sent to it other than by `wrap`. An unshielded
-transfer straight to this address raises a pool's balance with no note against
-it, and nothing can ever take it out again.
+And no way to take anything in other than by `wrap` and `redeem`: the ledger
+refuses a payment to a contract that none of its circuits claims in the same
+transaction.
 
 The other side of immutability: a defect found later cannot be fixed in place,
 cannot be paused, and cannot be announced to the people affected, because there
@@ -218,13 +213,6 @@ anything else the build refuses rather than guessing, and `COMPACTC` can point
 at one you installed yourself. Proving keys
 are skipped by default because they take minutes and are needed only to deploy or
 to prove; `npm run compact -- --with-proving-keys` builds them.
-
-The token module this contract is built from is
-[OpenZeppelin Contracts for Compact](https://github.com/OpenZeppelin/compact-contracts),
-which is where the burn's check that a note belongs to the pool it is burned
-against comes from. **It is an alpha release**, pinned exactly, and it is where
-most of the money-handling code in a deployment of this contract comes from.
-Read it before you rely on this.
 
 ## Licence
 

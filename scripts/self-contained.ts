@@ -24,27 +24,13 @@ const URL_PATTERN = /\bhttps?:\/\/\S+/g;
 const PATH_PATTERN =
   /(?<![\w@.$/-])([A-Za-z0-9_.-]+\/)+[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\.[A-Za-z0-9]+/g;
 
-/** Text this repository does not own, and is not answerable for. */
-function isVendored(path: string): boolean {
-  return path === 'node_modules' || path.includes('node_modules/');
-}
-
 function withoutUrls(text: string): string {
   return text.replace(URL_PATTERN, (url) => ' '.repeat(url.length));
 }
 
-/**
- * Every path a single line points at, already stripped of URLs and of anything
- * under a vendored directory.
- */
+/** Every path a single line points at, once URLs are stripped from it. */
 export function pathsCitedIn(line: string): string[] {
-  const found: string[] = [];
-  for (const match of withoutUrls(line).matchAll(PATH_PATTERN)) {
-    if (!isVendored(match[0])) {
-      found.push(match[0]);
-    }
-  }
-  return found;
+  return [...withoutUrls(line).matchAll(PATH_PATTERN)].map((match) => match[0]);
 }
 
 /**

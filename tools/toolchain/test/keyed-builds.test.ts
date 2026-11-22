@@ -62,7 +62,6 @@ describe('the contracts compiled with keys', () => {
       'NativeTokenConverter',
       'CallingContract',
       'PublicTokenMinter',
-      'WiderRecipientConverter',
     ]);
   });
 
