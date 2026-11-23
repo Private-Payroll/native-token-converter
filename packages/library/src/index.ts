@@ -7,3 +7,16 @@ export {
   normaliseAddress,
   wrappedColour,
 } from './wrapped-colour.js';
+export {
+  deployState,
+  type Authority,
+  type BuiltDeployState,
+  type Constructible,
+  type DeployStateInput,
+} from './deploy-state.js';
+export {
+  OWNERLESS,
+  RELEASED_CONVERTERS,
+  checkConverter,
+  type ReleasedConverter,
+} from './released-converter.js';

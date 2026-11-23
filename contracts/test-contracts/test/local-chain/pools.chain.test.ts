@@ -23,6 +23,7 @@ import {
   importCompiledModule,
   type Deployed,
 } from '@native-token-converter/local-chain/contracts';
+import { OWNERLESS } from '../../../../packages/library/src/released-converter.js';
 import { shieldedCoinInfo } from '@native-token-converter/local-chain/wallet';
 import { converterOnChain, hex } from '../../../converter/test/local-chain/converter-on-chain.js';
 
@@ -51,6 +52,7 @@ beforeAll(async () => {
   minter = await deploy(
     contractProviders(on.wallet, on.chain.configuration, MINTER_BUILD),
     compiledContract<Minter>('PublicTokenMinter', module.Contract, MINTER_BUILD),
+    OWNERLESS,
   );
   on.measurements.push(minter.measurement);
 });

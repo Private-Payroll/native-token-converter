@@ -8,8 +8,9 @@
  * publishes and where its build goes. A compiler that is not the pinned
  * version is refused before anything is built.
  *
- * Proving keys are skipped unless --with-proving-keys is passed: they take
- * minutes and megabytes, and are needed only to deploy or to prove.
+ * This build has no proving or verifier keys, which take minutes and are
+ * needed only to deploy or to prove: `npm run compile:keys` builds every
+ * contract with its keys, into its own folder.
  */
 
 import { join, resolve } from 'node:path';
@@ -19,9 +20,6 @@ const ROOT = resolve(import.meta.dirname, '..');
 const SOURCE = join(ROOT, 'src', 'NativeTokenConverter.compact');
 const OUTPUT = join(ROOT, 'managed');
 
-const withProvingKeys = process.argv.includes('--with-proving-keys');
-const found = compileContract(SOURCE, OUTPUT, { withProvingKeys });
+const found = compileContract(SOURCE, OUTPUT, { withProvingKeys: false });
 
-console.log(
-  `compiled with Compact ${found}${withProvingKeys ? ', with proving keys' : ', without proving keys'}`,
-);
+console.log(`compiled with Compact ${found}, without proving keys`);

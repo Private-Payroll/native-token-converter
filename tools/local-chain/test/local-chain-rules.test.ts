@@ -3,14 +3,17 @@
 /**
  * The rules a local chain is started by, checked without starting one: the
  * images it runs are pinned exactly, once each; an address named in the
- * environment is taken only when it is a base address; and a service that
- * never answers is refused with what to do about it.
+ * environment is taken only when it is a base address; a service that never
+ * answers is refused with what to do about it; and somebody about to wait is
+ * told what downloads and whether Docker has the memory to prove.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  DOCKER_MEMORY_FLOOR,
   ENDPOINT_VARIABLES,
+  beforeTheChainStarts,
   endpointFromEnvironment,
   environmentConfiguration,
   neverAnswered,
@@ -153,5 +156,34 @@ describe('services named in the environment', () => {
     expect(partialChainProblem({ ...none, indexer: at, 'proof server': at })).toMatch(
       /LOCAL_CHAIN_INDEXER is set and LOCAL_CHAIN_NODE is not/,
     );
+  });
+});
+
+describe('before the chain starts', () => {
+  it('says the first run downloads the images and every run the proving parameters', () => {
+    expect(beforeTheChainStarts(DOCKER_MEMORY_FLOOR)).toEqual([
+      expect.stringMatching(
+        /first run downloads .* images.*every run's proof server downloads its proving parameters/s,
+      ),
+    ]);
+  });
+
+  it('names too little memory for Docker, and where in Docker Desktop to give it more', () => {
+    const notes = beforeTheChainStarts(2 * 1024 ** 3);
+    expect(notes[1]).toMatch(
+      /Docker has 2\.0 GiB of memory.*Settings, then Resources.*at least 4\.0 GiB/s,
+    );
+  });
+
+  it('says Docker did not report its memory when it reads as nothing', () => {
+    for (const unread of [Number.NaN, 0]) {
+      expect(beforeTheChainStarts(unread)[1]).toMatch(
+        /did not say how much memory it has.*at least 4\.0 GiB/s,
+      );
+    }
+  });
+
+  it('says nothing of memory when Docker has enough', () => {
+    expect(beforeTheChainStarts(DOCKER_MEMORY_FLOOR)).toHaveLength(1);
   });
 });

@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Deploys any compiled contract on a local chain and calls its circuits,
- * measuring every transaction as it goes.
+ * Deploys any compiled contract on a local chain, with the authority it is
+ * given, and calls its circuits, measuring every transaction as it goes.
  *
- * The deploy and call pipeline is Midnight.js's own: this builds its providers
- * for one compiled contract and a wallet, and wraps the proof and submission
- * providers to time them. Sizes, modelled costs and fees are read off the
- * finalized transaction with the ledger's own API, under the parameters of the
- * block it landed in. A contract with private state or witnesses, or whose
- * constructor takes arguments, is outside what this offers and is refused by
- * the types rather than at run time.
+ * The deploy state is assembled by the client library's `deployState`, never
+ * by Midnight.js's own deploy, which always holds the contract by one key. The deploy is then proved, balanced and sent through Midnight.js,
+ * and the converter is deployed only through `deployConverter`, which refuses
+ * anything but the converter the library releases, before it is sent and once
+ * it is on the chain. Calls go through Midnight.js's own call pipeline. Sizes,
+ * modelled costs and fees are read off the finalized transaction with the
+ * ledger's own API, under the parameters of the block it landed in. A contract
+ * with private state or witnesses, or whose constructor takes arguments, is
+ * outside what this offers and is refused by the types rather than at run
+ * time.
  */
 
-import { pathToFileURL } from 'node:url';
-import { join } from 'node:path';
 import { CompiledContract, type Contract } from '@midnight-ntwrk/compact-js';
 import {
   ContractState,
@@ -23,14 +24,17 @@ import {
   type StateValue,
 } from '@midnight-ntwrk/compact-runtime';
 import {
-  deployContract,
-  type Ledger9DeployContractOptionsBase,
-  type Ledger9DeployedContract,
+  createCircuitCallTxInterface,
+  submitTx,
+  type Ledger9CircuitCallTxInterface,
+  type Ledger9ContractProviders,
 } from '@midnight-ntwrk/midnight-js-contracts';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
 import {
+  LedgerTransaction,
+  SucceedEntirely,
   ZKConfigRegistry,
   type Ledger9FinalizedTxData,
   type MidnightProvider,
@@ -43,11 +47,24 @@ import {
   type EnvironmentConfiguration,
 } from '@midnight-ntwrk/testkit-js';
 import {
+  ContractDeploy,
+  ContractState as LedgerContractState,
+  Intent,
   LedgerParameters,
   Transaction,
   type NormalizedCost,
   type SyntheticCost,
 } from '@midnightntwrk/ledger-v9';
+import { importCompiledModule, verifierKeys } from '@native-token-converter/toolchain/keyed-builds';
+import {
+  deployState,
+  type Authority,
+  type Constructible,
+} from '../../../packages/library/src/deploy-state.js';
+import {
+  converterDeployState,
+  converterProblems,
+} from '../../../packages/library/src/released-converter.js';
 import type { LocalWallet } from './wallet.js';
 
 /** A compiled contract with no private state, which is every contract this deploys. */
@@ -56,31 +73,30 @@ export type StatelessContract = Contract<undefined>;
 /** The compiled contract, as Midnight.js takes it. */
 export type Compiled<C extends StatelessContract> = CompiledContract.CompiledContract<C, undefined>;
 
-/**
- * The generated module in a build folder, as `import()` returns it. The caller
- * names its type, normally `typeof import('<build>/contract/index.js')` of a
- * build of the same source: nothing at run time checks that it is right.
- */
-export async function importCompiledModule<M>(buildDirectory: string): Promise<M> {
-  const loaded: unknown = await import(
-    pathToFileURL(join(buildDirectory, 'contract', 'index.js')).href
-  );
-  return loaded as M;
-}
+export { importCompiledModule } from '@native-token-converter/toolchain/keyed-builds';
 
 /**
  * A compiled contract bound to the folder its keys and circuits were built
- * into, for a contract that declares no witnesses.
+ * into, for a contract that declares no witnesses: as Midnight.js calls it,
+ * and as its own constructor builds its deploy state.
  */
+export interface ContractBuild<C extends StatelessContract> {
+  readonly compiled: Compiled<C>;
+  readonly contract: Constructible<undefined>;
+  readonly buildDirectory: string;
+}
+
+/** The build of a contract that declares no witnesses, from its generated `Contract` class. */
 export function compiledContract<C extends StatelessContract>(
   tag: string,
-  constructor: new (witnesses: Record<string, never>) => C,
+  constructor: new (witnesses: Record<string, never>) => C & Constructible<undefined>,
   buildDirectory: string,
-): Compiled<C> {
-  return CompiledContract.make<C, undefined>(tag, constructor).pipe(
+): ContractBuild<C> {
+  const compiled = CompiledContract.make<C, undefined>(tag, constructor).pipe(
     CompiledContract.withVacantWitnesses,
     CompiledContract.withCompiledFileAssets(buildDirectory),
   );
+  return { compiled, contract: new constructor({}), buildDirectory };
 }
 
 /** How long the slow steps of the last transaction took. */
@@ -285,41 +301,135 @@ function resetClock(clock: Clock): void {
 
 /** A deployed contract, the providers it was deployed through, and what deploying it measured. */
 export interface Deployed<C extends StatelessContract> {
-  readonly contract: Ledger9DeployedContract<C>;
+  readonly callTx: Ledger9CircuitCallTxInterface<C>;
   readonly address: string;
   readonly through: ContractProviders;
   readonly measurement: Measurement;
 }
 
 /**
- * `Compiled<C>` when the constructor of `C` takes no arguments, and `never`
- * otherwise, so that passing such a contract to `deploy` does not typecheck.
+ * `ContractBuild<C>` when the constructor of `C` takes no arguments, and
+ * `never` otherwise, so that passing such a contract to `deploy` does not
+ * typecheck.
  */
-export type ArgumentlessCompiled<C extends StatelessContract> =
-  Contract.InitializeParameters<C> extends [] ? Compiled<C> : never;
+export type ArgumentlessBuild<C extends StatelessContract> =
+  Contract.InitializeParameters<C> extends [] ? ContractBuild<C> : never;
 
-/** Deploys `compiled`, whose constructor takes no arguments, and waits until it is final. */
-export async function deploy<C extends StatelessContract>(
+/**
+ * Sends `state` as the deploy of `build`'s contract and waits until it is
+ * final. Refuses a deploy the chain did not apply in full.
+ */
+async function sendDeploy<C extends StatelessContract>(
   through: ContractProviders,
-  compiled: Compiled<C> & ArgumentlessCompiled<C>,
+  build: ContractBuild<C>,
+  state: ContractState,
 ): Promise<Deployed<C>> {
   resetClock(through.clock);
-  // Midnight.js asks for constructor arguments only of a contract whose
-  // constructor takes some, which it cannot tell of a contract type left open
-  // here; the parameter's type has already refused any such contract.
-  const plain: Compiled<C> = compiled;
-  const options = { compiledContract: plain } as Ledger9DeployContractOptionsBase<C>;
-  const contract = await deployContract(through.providers, options);
-  const finalizedAt = performance.now();
-  const address = contract.deployTxData.public.contractAddress;
-  const measurement = await measure(
-    'deploy',
-    contract.deployTxData.public,
-    address,
-    through,
-    finalizedAt,
+  const { config } = through.providers;
+  const deploy = new ContractDeploy(LedgerContractState.deserialize(state.serialize()));
+  const expires = new Date(Date.now() + config.ttlSeconds * 1_000);
+  const tx = Transaction.fromParts(
+    config.networkId,
+    undefined,
+    undefined,
+    Intent.new(expires).addDeploy(deploy),
   );
-  return { contract, address, through, measurement };
+  // The address is known before anything is sent, so a failure says which
+  // contract may or may not now exist, and a second attempt is not a blind one.
+  const record = await submitTx(through.providers, {
+    unprovenTx: LedgerTransaction.seal('v9', 'Unproven', tx),
+  }).catch((error: unknown) => {
+    throw new Error(
+      `the deploy of ${deploy.address} failed, and the chain may or may not hold it: ` +
+        (error instanceof Error ? error.message : String(error)),
+      { cause: error },
+    );
+  });
+  const finalizedAt = performance.now();
+  if (record.era !== 'v9' || record.status !== SucceedEntirely) {
+    throw new Error(
+      `the deploy of ${deploy.address} was not applied in full: ${record.era} ${record.status}`,
+    );
+  }
+  const address = deploy.address;
+  const measurement = await measure('deploy', record, address, through, finalizedAt);
+  // The providers serve every circuit of any contract with no private state,
+  // which is all this deploys; Midnight.js types them by one contract's.
+  const callTx = createCircuitCallTxInterface(
+    through.providers as Ledger9ContractProviders<C>,
+    build.compiled,
+    address,
+    undefined,
+  );
+  return { callTx, address, through, measurement };
+}
+
+/**
+ * Refuses `build` when it is the converter the library releases, which only
+ * `deployConverter` deploys: what it is decides, not where it was built.
+ */
+async function refuseTheConverter<C extends StatelessContract>(
+  build: ContractBuild<C>,
+  keys: Readonly<Record<string, Uint8Array>>,
+): Promise<void> {
+  const asTheConverter = await converterDeployState(build.contract, keys).catch(() => undefined);
+  if (
+    asTheConverter !== undefined &&
+    (await converterProblems(asTheConverter.serialize())).length === 0
+  ) {
+    throw new Error(
+      'the converter is deployed only by deployConverter, which refuses anything but the released converter. Nothing was sent.',
+    );
+  }
+}
+
+/**
+ * Deploys `build`, whose constructor takes no arguments, held by `authority`,
+ * and waits until it is final. Refuses the converter's build, which only
+ * `deployConverter` deploys.
+ */
+export async function deploy<C extends StatelessContract>(
+  through: ContractProviders,
+  build: ArgumentlessBuild<C>,
+  authority: Authority,
+): Promise<Deployed<C>> {
+  const plain: ContractBuild<C> = build;
+  const keys = verifierKeys(plain.buildDirectory);
+  await refuseTheConverter(plain, keys);
+  const { state } = await deployState({
+    contract: plain.contract,
+    args: [],
+    initialPrivateState: undefined,
+    coinPublicKey: through.providers.walletProvider.getCoinPublicKey(),
+    verifierKeys: keys,
+    authority,
+  });
+  return sendDeploy(through, plain, state);
+}
+
+/**
+ * Deploys the converter built into `build` held by nobody, so that no key can
+ * change it, and waits until it is final. Refuses, naming every problem, a deploy state
+ * that is not the converter the library releases, before anything is sent, and
+ * the contract the chain then holds at its address if it is not that converter.
+ */
+export async function deployConverter<C extends StatelessContract>(
+  through: ContractProviders,
+  build: ArgumentlessBuild<C>,
+): Promise<Deployed<C>> {
+  const plain: ContractBuild<C> = build;
+  const state = await converterDeployState(plain.contract, verifierKeys(plain.buildDirectory));
+  const built = await converterProblems(state.serialize());
+  if (built.length > 0) {
+    throw new Error(`the converter built here was not sent: ${built.join('; ')}`);
+  }
+  const deployed = await sendDeploy(through, plain, state);
+  const onChain = await deployedState(through, deployed.address);
+  const found = await converterProblems(onChain.serialize());
+  if (found.length > 0) {
+    throw new Error(`the converter the chain holds at ${deployed.address}: ${found.join('; ')}`);
+  }
+  return deployed;
 }
 
 /** What a call returned, and what it measured. */
@@ -335,7 +445,7 @@ export async function call<C extends StatelessContract, K extends Contract.Prova
   args: Contract.CircuitParameters<C, K>,
 ): Promise<Called<C, K>> {
   resetClock(deployed.through.clock);
-  const finalized = await deployed.contract.callTx[circuit](...args);
+  const finalized = await deployed.callTx[circuit](...args);
   const finalizedAt = performance.now();
   const measurement = await measure(
     circuit,
@@ -348,6 +458,23 @@ export async function call<C extends StatelessContract, K extends Contract.Prova
 }
 
 /**
+ * The whole state of the contract at `address`, balances included, as the
+ * indexer last reports it. Refuses when the indexer has no contract there.
+ */
+export async function deployedState(
+  through: ContractProviders,
+  address: string,
+): Promise<ContractState> {
+  const read = await through.providers.publicDataProvider.queryContractState(address);
+  if (read === null) {
+    throw new Error(
+      `the indexer has no contract at ${address}; check that it was deployed on this chain`,
+    );
+  }
+  return read.contractState.deserialize({ v9: ContractState });
+}
+
+/**
  * The public state of the contract at `address`, as the indexer last reports
  * it, for the generated `ledger` function to read. Refuses when the indexer
  * has no contract there.
@@ -356,25 +483,24 @@ export async function contractState(
   through: ContractProviders,
   address: string,
 ): Promise<StateValue> {
-  const read = await through.providers.publicDataProvider.queryContractState(address);
-  if (read === null) {
-    throw new Error(
-      `the indexer has no contract at ${address}; check that it was deployed on this chain`,
-    );
-  }
-  return read.contractState.deserialize({ v9: ContractState }).data.state;
+  return (await deployedState(through, address)).data.state;
 }
 
 /**
  * The unshielded tokens the contract at `address` holds, by colour as 64 hex
- * characters, as the indexer last reports them.
+ * characters, as the indexer last reports them. Refuses when the indexer has
+ * no contract there, rather than report every pool empty.
  */
 export async function contractBalances(
   through: ContractProviders,
   address: string,
 ): Promise<Readonly<Record<string, bigint>>> {
-  const balances =
-    (await through.providers.publicDataProvider.queryUnshieldedBalances(address)) ?? [];
+  const balances = await through.providers.publicDataProvider.queryUnshieldedBalances(address);
+  if (balances === null) {
+    throw new Error(
+      `the indexer has no contract at ${address}; check that it was deployed on this chain`,
+    );
+  }
   return Object.fromEntries(balances.map(({ tokenType, balance }) => [tokenType, balance]));
 }
 
