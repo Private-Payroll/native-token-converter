@@ -212,7 +212,7 @@ unpacked. The pinned version, where it comes from and those digests are in
 anything else the build refuses rather than guessing, and `COMPACTC` can point
 at one you installed yourself. Proving keys
 are skipped by default because they take minutes and are needed only to deploy or
-to prove; `npm run compact -- --with-proving-keys` builds them.
+to prove; `npm run compile:keys` builds every contract with them.
 
 ## Licence
 

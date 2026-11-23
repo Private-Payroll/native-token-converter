@@ -57,6 +57,49 @@ export function standardEndpoints(): Endpoints {
   return { node: at('node'), indexer: at('indexer'), 'proof server': at('proof server') };
 }
 
+/**
+ * The memory, in bytes, Docker is given below which proving may fail: the
+ * proof server alone holds about 2 GiB while it proves a call, beside the node
+ * and the indexer.
+ */
+export const DOCKER_MEMORY_FLOOR = 4 * 1024 ** 3;
+
+/** How long a started service is waited for until it answers, by default. */
+export const SECONDS_TO_ANSWER = 180;
+
+/**
+ * What somebody starting the chain's tests should know before they wait, given
+ * the memory Docker reports in bytes: the first run downloads the three
+ * images, every run's proof server downloads its proving parameters before it
+ * answers and is waited for only so long, and too little memory for Docker, or
+ * none reported, is named with how to give it more.
+ */
+export function beforeTheChainStarts(dockerMemory: number): string[] {
+  const minutes = String(SECONDS_TO_ANSWER / 60);
+  const notes = [
+    "The first run downloads the node, indexer and proof server images, about 1.5 GB, and every run's " +
+      `proof server downloads its proving parameters from Midnight before it answers, which is waited for ` +
+      `up to ${minutes} minutes. Only Docker's own logs show either while it runs.`,
+  ];
+  const gib = (bytes: number): string => (bytes / 1024 ** 3).toFixed(1);
+  const give = `In Docker Desktop, open Settings, then Resources, and give it at least ${gib(DOCKER_MEMORY_FLOOR)} GiB.`;
+  if (!Number.isFinite(dockerMemory) || dockerMemory <= 0) {
+    notes.push(
+      `Docker did not say how much memory it has, and proving needs about 2 GiB in the proof server alone. ${give}`,
+    );
+  } else if (dockerMemory < DOCKER_MEMORY_FLOOR) {
+    notes.push(
+      `Docker has ${gib(dockerMemory)} GiB of memory, and proving needs about 2 GiB in the proof server alone. ${give}`,
+    );
+  }
+  return notes;
+}
+
+/** The memory Docker reports, in bytes. */
+export function dockerMemory(): number {
+  return Number(docker(['info', '--format', '{{.MemTotal}}']));
+}
+
 /** Why Docker cannot be used here, or undefined when it answers. */
 export function dockerProblem(): string | undefined {
   try {
@@ -302,7 +345,7 @@ export interface StartOptions {
  */
 export async function startLocalChain(options: StartOptions = {}): Promise<LocalChain> {
   const environment = options.environment ?? process.env;
-  const seconds = options.secondsToAnswer ?? 180;
+  const seconds = options.secondsToAnswer ?? SECONDS_TO_ANSWER;
   const names = runNames(options.keptAs);
   const given: Record<Service, string | undefined> = {
     node: endpointFromEnvironment('node', environment),

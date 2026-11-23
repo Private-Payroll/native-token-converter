@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * The converter on a real chain: deployed from a genesis wallet, NIGHT
- * wrapped into a shielded coin the wallet finds by scanning for it, and a coin
- * redeemed back to NIGHT, with the pool read from the converter's public
- * balance on the ledger before and after each call. Every transaction is
+ * The converter on a real chain: deployed from a genesis wallet held by
+ * nobody, its authority read back from the chain and the whole contract
+ * checked against the one the library releases, NIGHT wrapped into a shielded
+ * coin the wallet finds by scanning for it, a coin redeemed back to NIGHT with
+ * the pool read from the converter's public balance on the ledger before and
+ * after each call, and the contract checked again once it has been used. Every transaction is
  * proved by the pinned proof server and finalized by the pinned node, and its
  * size, modelled cost, fee and timings are printed. Run with
  * `npm run test:local-chain`; the services are started with Docker unless the
@@ -38,6 +40,22 @@ async function coinsOfPool(): Promise<number> {
 }
 
 describe('the converter on a local chain', () => {
+  it('is deployed held by nobody: no key in its committee, one signature needed, never changed', async () => {
+    expect(await on.authority()).toEqual({ committee: 0, threshold: 1, counter: 0n });
+    expect(await on.problems()).toEqual([]);
+  });
+
+  it('refuses a change signed by a key outside its committee, and is still held by nobody', async () => {
+    await expect(on.changeWithAKeyOutsideItsCommittee()).rejects.toThrow(
+      /submitTx rejected the transaction/,
+    );
+    expect(await on.authority()).toEqual({ committee: 0, threshold: 1, counter: 0n });
+  });
+
+  it('is not deployed by the deploy for every other contract, which sends nothing', async () => {
+    await expect(on.deployThroughTheGeneralDeploy()).rejects.toThrow(/only by deployConverter/);
+  });
+
   it('takes the NIGHT it wraps into its pool and mints a coin of the pool colour, which the wallet finds', async () => {
     const nightBefore = night(await on.wallet.holdings());
     const poolBefore = await on.pool(BACKING);
@@ -68,5 +86,9 @@ describe('the converter on a local chain', () => {
     // The wallet ends with as many coins of the pool colour as it held before
     // the wrap: the redeem paid none back to it.
     expect(await coinsOfPool()).toBe(coinsBefore);
+  });
+
+  it('is still the converter the library releases after it has wrapped and redeemed', async () => {
+    expect(await on.problems()).toEqual([]);
   });
 });

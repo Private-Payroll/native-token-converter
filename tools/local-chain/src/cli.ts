@@ -6,14 +6,18 @@
  * or a test pointed at them by the LOCAL_CHAIN_* variables finds them at the
  * same addresses every time; `stop` removes exactly what `start` made. It
  * refuses when Docker cannot be reached, saying how to make it reachable;
- * `check` does only that, before anything slow that needs Docker later.
+ * `check` does only that, before anything slow that needs Docker later, and
+ * says what the first run downloads and whether Docker has the memory to
+ * prove.
  *
  *   npm run local-chain:start, or npm run local-chain:stop
  */
 
 import { arch, platform } from 'node:os';
 import {
+  beforeTheChainStarts,
   docker,
+  dockerMemory,
   dockerProblem,
   ENDPOINT_VARIABLES,
   environmentConfiguration,
@@ -94,6 +98,9 @@ if (problem !== undefined) {
 try {
   if (command === 'check') {
     console.log('Docker answers.');
+    for (const note of beforeTheChainStarts(dockerMemory())) {
+      console.log(note);
+    }
   } else if (command === 'start') {
     await start();
   } else if (command === 'stop') {

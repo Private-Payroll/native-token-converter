@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  CONVERTER,
   buildManifest,
   contractSources,
   isRecorded,
@@ -21,6 +22,7 @@ import {
   keyedBuildDirectory,
   manifestPath,
   manifestText,
+  verifierKeys,
 } from '../src/keyed-builds.js';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..');
@@ -110,9 +112,10 @@ describe('a manifest', () => {
       arch: 'a',
     });
     const text = manifestText(manifest);
-    expect(text.endsWith('}\n')).toBe(true);
-    expect(JSON.parse(text)).toEqual(manifest);
-    expect(manifestText(JSON.parse(text) as typeof manifest)).toBe(text);
+    expect(text).toBe(
+      '{\n  "contract": "c",\n  "compiler": "v",\n  "platform": "p",\n  "arch": "a",\n' +
+        `  "sha256": {\n    "${at('zkir', 'a.zkir')}": "${sha('a')}"\n  }\n}\n`,
+    );
   });
 });
 
@@ -133,11 +136,42 @@ describe('a build a test asks for', () => {
     expect(() => keyedBuild(workspace, 'Half')).toThrow(/no build with keys/);
   });
 
+  it('is refused when it has a verifier key but no code', () => {
+    const workspace = folder({ [at('managed-keys', 'Keys', 'keys', 'wrap.verifier')]: '' });
+    expect(() => keyedBuild(workspace, 'Keys')).toThrow(/no build with keys/);
+  });
+
   it('is its folder when it holds the code and a verifier key', () => {
     const workspace = folder({
       [at('managed-keys', 'Whole', 'contract', 'index.js')]: '',
       [at('managed-keys', 'Whole', 'keys', 'wrap.verifier')]: '',
     });
     expect(keyedBuild(workspace, 'Whole')).toBe(join(workspace, 'managed-keys', 'Whole'));
+  });
+});
+
+describe('the verifier keys of a build', () => {
+  it('are every key file the compiler wrote, by circuit name, byte for byte, and no proving key', () => {
+    const root = folder({
+      [at('keys', 'wrap.verifier')]: 'wrap key',
+      [at('keys', 'redeem.verifier')]: 'redeem key',
+      [at('keys', 'wrap.prover')]: 'proving key',
+    });
+    const keys = verifierKeys(root);
+    expect(Object.keys(keys)).toEqual(['redeem', 'wrap']);
+    expect(Buffer.from(keys['wrap'] ?? []).toString()).toBe('wrap key');
+  });
+
+  it('are none for a build without keys', () => {
+    expect(verifierKeys(folder({ [at('contract', 'index.js')]: 'code' }))).toEqual({});
+  });
+});
+
+describe('a converter built on this machine', () => {
+  it("is the converter workspace's own contract", () => {
+    expect(contractSources(ROOT).map((each) => [each.workspace, each.name])).toContainEqual([
+      join(ROOT, CONVERTER.workspace),
+      CONVERTER.name,
+    ]);
   });
 });

@@ -3,7 +3,9 @@
 /**
  * The converter deployed on a local chain, for every chain test that uses it:
  * the chain and a genesis wallet started before a file's tests and stopped
- * after them, the converter deployed from that wallet, the wallet as a mint
+ * after them, the converter deployed from that wallet through the one deploy
+ * that refuses anything but the released converter, held by nobody, its
+ * authority and its differences from the release read back, the wallet as a mint
  * recipient and as a payee, wraps to the wallet, and the pools read from the
  * converter's public balance on the ledger. Every transaction measured is
  * printed once the file's tests have run.
@@ -11,7 +13,15 @@
 
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { encodeCoinPublicKey, encodeUserAddress } from '@midnight-ntwrk/compact-runtime';
+import {
+  encodeCoinPublicKey,
+  encodeUserAddress,
+  sampleSigningKey,
+} from '@midnight-ntwrk/compact-runtime';
+import {
+  createContractMaintenanceTxInterface,
+  type Ledger9ContractProviders,
+} from '@midnight-ntwrk/midnight-js-contracts';
 import { afterAll, beforeAll, expect } from 'vitest';
 import { keyedBuild } from '@native-token-converter/toolchain/keyed-builds';
 import {
@@ -20,15 +30,22 @@ import {
   contractBalances,
   contractProviders,
   deploy,
+  deployConverter,
+  deployedState,
   importCompiledModule,
   measurementSummary,
   type Called,
+  type ContractBuild,
   type Deployed,
   type Measurement,
 } from '@native-token-converter/local-chain/contracts';
 import type { LocalChain } from '@native-token-converter/local-chain/services';
 import { chainSession } from '@native-token-converter/local-chain/session';
 import type { LocalWallet, ShieldedCoin } from '@native-token-converter/local-chain/wallet';
+import {
+  OWNERLESS,
+  converterProblems,
+} from '../../../../packages/library/src/released-converter.js';
 import { wrappedColour } from '../../../../packages/library/src/wrapped-colour.js';
 
 type ConverterModule = typeof import('../../managed-keys/NativeTokenConverter/contract/index.js');
@@ -44,6 +61,9 @@ export const CONVERTER_BUILD = keyedBuild(
 
 /** Thirty-two zero bytes, for the branch of a recipient that is not taken. */
 export const UNUSED = { bytes: new Uint8Array(32) };
+
+/** The key a change to the converter is signed with: nobody's, and not in its committee. */
+export const OUTSIDE_KEY = sampleSigningKey();
 
 /** Either side of a recipient, as the compiled circuits take it. */
 export interface Recipient {
@@ -69,6 +89,7 @@ export class ConverterOnChain {
   #chain: LocalChain | undefined;
   #wallet: LocalWallet | undefined;
   #converter: Deployed<Converter> | undefined;
+  #build: ContractBuild<Converter> | undefined;
 
   /** Starts the chain with the genesis wallet `genesisWallet` paying, and deploys the converter. */
   async start(session: ReturnType<typeof chainSession>, genesisWallet: number): Promise<void> {
@@ -76,9 +97,14 @@ export class ConverterOnChain {
     this.#chain = chain;
     this.#wallet = wallet;
     const module = await importCompiledModule<ConverterModule>(CONVERTER_BUILD);
-    this.#converter = await deploy(
+    this.#build = compiledContract<Converter>(
+      'NativeTokenConverter',
+      module.Contract,
+      CONVERTER_BUILD,
+    );
+    this.#converter = await deployConverter(
       contractProviders(wallet, chain.configuration, CONVERTER_BUILD),
-      compiledContract<Converter>('NativeTokenConverter', module.Contract, CONVERTER_BUILD),
+      this.#build,
     );
     this.measurements.push(this.#converter.measurement);
   }
@@ -93,6 +119,46 @@ export class ConverterOnChain {
 
   get converter(): Deployed<Converter> {
     return started(this.#converter);
+  }
+
+  /** The converter's build sent through the deploy for every other contract, which refuses it. */
+  deployThroughTheGeneralDeploy(): Promise<Deployed<Converter>> {
+    return deploy(
+      contractProviders(this.wallet, this.chain.configuration, CONVERTER_BUILD),
+      started(this.#build),
+      OWNERLESS,
+    );
+  }
+
+  /**
+   * Asks the chain to hand the converter to a new key, signed by a key that is
+   * not in its committee, as anybody holding a key could.
+   */
+  async changeWithAKeyOutsideItsCommittee(): Promise<unknown> {
+    const { providers } = this.converter.through;
+    await providers.privateStateProvider.setSigningKey(this.converter.address, OUTSIDE_KEY);
+    return createContractMaintenanceTxInterface(
+      providers as Ledger9ContractProviders,
+      started(this.#build).compiled,
+      this.converter.address,
+    ).replaceAuthority(sampleSigningKey());
+  }
+
+  /** Who may change the converter, as the chain holds it now. */
+  async authority(): Promise<{ committee: number; threshold: number; counter: bigint }> {
+    const held = (await deployedState(this.converter.through, this.converter.address))
+      .maintenanceAuthority;
+    return {
+      committee: held.committee.length,
+      threshold: held.threshold,
+      counter: held.counter,
+    };
+  }
+
+  /** Every way the contract the chain holds now differs from the converter the library releases. */
+  async problems(): Promise<string[]> {
+    const state = await deployedState(this.converter.through, this.converter.address);
+    return converterProblems(state.serialize());
   }
 
   /** The colour of the converter's pool for `backing`, as 64 hex characters. */

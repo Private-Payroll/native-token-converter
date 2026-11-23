@@ -33,6 +33,7 @@ import {
   importCompiledModule,
   type Deployed,
 } from '@native-token-converter/local-chain/contracts';
+import { OWNERLESS } from '../../../../packages/library/src/released-converter.js';
 import { NIGHT, shieldedCoinInfo, type Holdings } from '@native-token-converter/local-chain/wallet';
 import {
   CONVERTER_BUILD,
@@ -86,6 +87,7 @@ async function freshCaller(): Promise<Deployed<Caller>> {
     deploy(
       contractProviders(on.wallet, on.chain.configuration, CALLER_BUILD, { callees }),
       compiledContract<Caller>('CallingContract', callerModule.Contract, CALLER_BUILD),
+      OWNERLESS,
     ),
   );
 }
@@ -235,7 +237,7 @@ describe('a coin the wallet gives the contract', () => {
       withContractScopedTransaction<Converter, 'wrap'>(
         converter.through.providers as Ledger9ContractProviders<Converter, 'wrap'>,
         async (scope) => {
-          const wrapped = await converter.contract.callTx.wrap(
+          const wrapped = await converter.callTx.wrap(
             scope,
             BACKING,
             AMOUNT,
@@ -246,7 +248,7 @@ describe('a coin the wallet gives the contract', () => {
           // in it does not typecheck; it is cast here to see what Midnight.js
           // does with one at run time.
           const sameScope = scope as unknown as Ledger9TransactionContext<Caller, 'deposit'>;
-          await caller.contract.callTx.deposit(sameScope, wrapped.private.result);
+          await caller.callTx.deposit(sameScope, wrapped.private.result);
         },
       ),
     );
